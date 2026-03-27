@@ -18,7 +18,7 @@ export default function MySubjects() {
             <tbody>
               {subjects.length === 0 ? <tr><td colSpan="4" style={{textAlign:'center',padding:'40px',color:'var(--gray-400)'}}>No subjects found</td></tr> :
               subjects.map(s => (
-                <tr key={s.id}>
+                <tr key={s.code}>
                   <td style={{fontWeight:600}}>{s.name}</td>
                   <td><span className="badge badge-info">{s.code}</span></td>
                   <td>Sem {s.semester}</td>

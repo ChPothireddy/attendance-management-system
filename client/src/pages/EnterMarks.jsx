@@ -7,18 +7,15 @@ export default function EnterMarks() {
   const [selectedAlloc, setSelectedAlloc] = useState(null);
   const [students, setStudents] = useState([]);
   const [examType, setExamType] = useState('mid1');
-  const [maxMarks, setMaxMarks] = useState(30);
+  const [maxMarks, setMaxMarks] = useState(20);
   const [marks, setMarks] = useState({});
   const [saving, setSaving] = useState(false);
 
   const examTypes = [
-    { value: 'mid1', label: 'Mid Term 1', max: 30 },
-    { value: 'mid2', label: 'Mid Term 2', max: 30 },
-    { value: 'quiz1', label: 'Quiz 1', max: 10 },
-    { value: 'quiz2', label: 'Quiz 2', max: 10 },
-    { value: 'assignment1', label: 'Assignment 1', max: 10 },
-    { value: 'assignment2', label: 'Assignment 2', max: 10 },
-    { value: 'final', label: 'Final Exam', max: 100 },
+    { value: 'mid1', label: 'Mid Term 1', max: 20 },
+    { value: 'mid2', label: 'Mid Term 2', max: 20 },
+    { value: 'assignment1', label: 'Assignment 1', max: 5 },
+    { value: 'assignment2', label: 'Assignment 2', max: 5 },
   ];
 
   useEffect(() => {

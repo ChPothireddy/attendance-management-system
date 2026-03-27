@@ -1,7 +1,12 @@
-from flask import Blueprint, jsonify, request
+from datetime import datetime, timezone
+from pathlib import Path
+from uuid import uuid4
+
+from flask import Blueprint, current_app, jsonify, request
+from werkzeug.utils import secure_filename
 
 from auth import role_required, token_required
-from models import AttendanceRecord, AttendanceSession, Mark, Student, Subject
+from models import Assignment, AssignmentSubmission, AttendanceRecord, AttendanceSession, Mark, Section, Student, Subject, db
 
 student_bp = Blueprint('student', __name__, url_prefix='/api/student')
 
@@ -13,6 +18,30 @@ def get_student_profile(current_user):
     return student
 
 
+def get_student_section(student):
+    return db.session.get(Section, student.section_id) if student else None
+
+
+def build_upload_url(path_value):
+    if not path_value:
+        return None
+    normalized_path = path_value.replace('\\', '/')
+    return f"/api/uploads/{normalized_path}"
+
+
+def save_uploaded_file(file_storage, folder_name):
+    if not file_storage or not file_storage.filename:
+        return None, None
+
+    uploads_dir = Path(current_app.root_path) / 'uploads' / folder_name
+    uploads_dir.mkdir(parents=True, exist_ok=True)
+    original_name = secure_filename(file_storage.filename)
+    stored_name = f"{uuid4().hex}_{original_name}"
+    relative_path = Path(folder_name) / stored_name
+    file_storage.save(uploads_dir / stored_name)
+    return str(relative_path).replace('\\', '/'), original_name
+
+
 @student_bp.route('/stats', methods=['GET'])
 @token_required
 @role_required('STUDENT')
@@ -20,15 +49,22 @@ def get_stats(current_user):
     student = get_student_profile(current_user)
     if not student:
         return jsonify({'error': 'Student not found'}), 404
+    section = get_student_section(student)
+    current_semester = section.current_semester if section else None
 
     total_classes = AttendanceRecord.query.filter_by(student_id=student.student_id).count()
     present_count = AttendanceRecord.query.filter_by(student_id=student.student_id, status='P').count()
     attendance_pct = round((present_count / total_classes) * 100, 1) if total_classes > 0 else 0
-    subject_count = Subject.query.filter_by(dept_id=student.dept_id).count()
+    subject_query = Subject.query.filter_by(dept_id=student.dept_id)
+    if current_semester is not None:
+        subject_query = subject_query.filter_by(semester=current_semester)
+    subject_count = subject_query.count()
     marks = Mark.query.filter_by(student_id=student.student_id).all()
     total_obtained = sum(mark.obtained_marks for mark in marks)
     total_max = sum(mark.max_marks for mark in marks)
     avg_marks = round((total_obtained / total_max) * 100, 1) if total_max > 0 else 0
+    total_assignments = Assignment.query.filter_by(section_id=student.section_id).count()
+    submitted_assignments = AssignmentSubmission.query.filter_by(student_id=student.student_id).count()
 
     return jsonify({
         'subjects': subject_count,
@@ -37,6 +73,9 @@ def get_stats(current_user):
         'attendance_percentage': attendance_pct,
         'avg_marks': avg_marks,
         'total_exams': len(marks),
+        'total_assignments': total_assignments,
+        'submitted_assignments': submitted_assignments,
+        'current_semester': current_semester,
     })
 
 
@@ -174,11 +213,77 @@ def get_subjects(current_user):
     student = get_student_profile(current_user)
     if not student:
         return jsonify({'error': 'Student not found'}), 404
+    section = get_student_section(student)
+    current_semester = section.current_semester if section else None
 
-    subjects = (
-        Subject.query
-        .filter_by(dept_id=student.dept_id)
-        .order_by(Subject.semester.asc(), Subject.subject_code.asc())
-        .all()
-    )
+    query = Subject.query.filter_by(dept_id=student.dept_id)
+    if current_semester is not None:
+        query = query.filter_by(semester=current_semester)
+
+    subjects = query.order_by(Subject.subject_code.asc()).all()
     return jsonify([s.to_dict() for s in subjects])
+
+
+@student_bp.route('/assignments', methods=['GET'])
+@token_required
+@role_required('STUDENT')
+def get_assignments(current_user):
+    student = get_student_profile(current_user)
+    if not student:
+        return jsonify({'error': 'Student not found'}), 404
+
+    assignments = Assignment.query.filter_by(section_id=student.section_id).order_by(Assignment.created_at.desc()).all()
+    submissions = AssignmentSubmission.query.filter_by(student_id=student.student_id).all()
+    submissions_by_assignment = {submission.assignment_id: submission for submission in submissions}
+
+    result = []
+    for assignment in assignments:
+        submission = submissions_by_assignment.get(assignment.assignment_id)
+        subject = Subject.query.get(assignment.subject_code)
+        result.append({
+            **assignment.to_dict(),
+            'subject_name': subject.subject_name if subject else assignment.subject_code,
+            'attachment_url': build_upload_url(assignment.attachment_path),
+            'submitted': submission is not None,
+            'submission_id': submission.submission_id if submission else None,
+            'submission_file_name': submission.file_name if submission else None,
+            'submission_file_url': build_upload_url(submission.file_path) if submission else None,
+            'submitted_at': submission.submitted_at.isoformat() if submission and submission.submitted_at else None,
+            'marks_awarded': submission.marks_awarded if submission else None,
+            'feedback': submission.feedback if submission else '',
+        })
+    return jsonify(result)
+
+
+@student_bp.route('/assignments/<int:assignment_id>/submit', methods=['POST'])
+@token_required
+@role_required('STUDENT')
+def submit_assignment(current_user, assignment_id):
+    student = get_student_profile(current_user)
+    if not student:
+        return jsonify({'error': 'Student not found'}), 404
+
+    assignment = db.session.get(Assignment, assignment_id)
+    if not assignment or assignment.section_id != student.section_id:
+        return jsonify({'error': 'Assignment not found'}), 404
+
+    file_path, file_name = save_uploaded_file(request.files.get('submission'), 'submissions')
+    if not file_path:
+        return jsonify({'error': 'Submission file is required'}), 400
+
+    submission = AssignmentSubmission.query.filter_by(assignment_id=assignment_id, student_id=student.student_id).first()
+    if not submission:
+        submission = AssignmentSubmission(assignment_id=assignment_id, student_id=student.student_id)
+        db.session.add(submission)
+
+    submission.file_path = file_path
+    submission.file_name = file_name
+    submission.submitted_at = datetime.now(timezone.utc)
+
+    db.session.commit()
+    return jsonify({
+        'message': 'Assignment submitted successfully',
+        'submission_id': submission.submission_id,
+        'file_name': submission.file_name,
+        'file_url': build_upload_url(submission.file_path),
+    })

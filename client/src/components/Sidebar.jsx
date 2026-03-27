@@ -5,7 +5,7 @@ import {
   HiOutlineClipboardList, HiOutlineChartBar, HiOutlineCog,
   HiOutlineLogout, HiOutlineOfficeBuilding, HiOutlineBookOpen,
   HiOutlineViewGrid, HiOutlineDocumentText, HiOutlineUsers,
-  HiOutlineCalendar, HiOutlinePencilAlt
+  HiOutlineCalendar, HiOutlinePencilAlt, HiOutlineDocumentAdd
 } from 'react-icons/hi';
 import './Sidebar.css';
 
@@ -39,6 +39,8 @@ const navConfig = {
     { section: 'Marks' },
     { to: '/enter-marks', label: 'Enter Marks', icon: HiOutlinePencilAlt },
     { to: '/marks-report', label: 'Marks Report', icon: HiOutlineDocumentText },
+    { section: 'Assignments' },
+    { to: '/faculty-assignments', label: 'Assignments', icon: HiOutlineDocumentAdd },
   ],
   student: [
     { section: 'Overview' },
@@ -47,6 +49,7 @@ const navConfig = {
     { to: '/my-attendance', label: 'My Attendance', icon: HiOutlineCalendar },
     { to: '/my-marks', label: 'My Marks', icon: HiOutlineDocumentText },
     { to: '/my-subjects', label: 'My Subjects', icon: HiOutlineBookOpen },
+    { to: '/my-assignments', label: 'Assignments', icon: HiOutlineDocumentAdd },
   ],
 };
 

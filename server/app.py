@@ -1,4 +1,6 @@
-from flask import Flask
+from pathlib import Path
+
+from flask import Flask, send_from_directory
 from flask_cors import CORS
 from config import Config
 from models import db
@@ -8,6 +10,8 @@ def create_app():
     app.config.from_object(Config)
     CORS(app, origins=["*"])
     db.init_app(app)
+    uploads_dir = Path(app.root_path) / 'uploads'
+    uploads_dir.mkdir(exist_ok=True)
 
     # Register blueprints
     from auth import auth_bp
@@ -22,13 +26,13 @@ def create_app():
     app.register_blueprint(faculty_bp)
     app.register_blueprint(student_bp)
 
-    # Create tables
-    with app.app_context():
-        db.create_all()
-
     @app.route('/api/health')
     def health():
         return {'status': 'ok', 'message': 'Attendance Management System API'}
+
+    @app.route('/api/uploads/<path:filename>')
+    def uploaded_file(filename):
+        return send_from_directory(uploads_dir, filename, as_attachment=False)
 
     return app
 

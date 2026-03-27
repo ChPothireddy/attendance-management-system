@@ -200,3 +200,65 @@ class Mark(db.Model):
         }
 
 
+class Assignment(db.Model):
+    __tablename__ = 'assignments'
+    assignment_id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    subject_code = db.Column(db.String(20), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    faculty_id = db.Column(db.Integer, db.ForeignKey('faculties.faculty_id'), nullable=False)
+    due_date = db.Column(db.Date, nullable=True)
+    marks_slot = db.Column(db.String(30), nullable=True)
+    max_marks = db.Column(db.Float, nullable=True)
+    attachment_name = db.Column(db.String(255), nullable=True)
+    attachment_path = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'assignment_id': self.assignment_id,
+            'title': self.title,
+            'description': self.description,
+            'subject_code': self.subject_code,
+            'batch_id': self.batch_id,
+            'section_id': self.section_id,
+            'faculty_id': self.faculty_id,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'marks_slot': self.marks_slot,
+            'max_marks': self.max_marks,
+            'attachment_name': self.attachment_name,
+            'attachment_path': self.attachment_path,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AssignmentSubmission(db.Model):
+    __tablename__ = 'assignment_submissions'
+    submission_id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey('assignments.assignment_id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.student_id'), nullable=False)
+    file_name = db.Column(db.String(255), nullable=True)
+    file_path = db.Column(db.String(255), nullable=True)
+    submitted_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    marks_awarded = db.Column(db.Float, nullable=True)
+    feedback = db.Column(db.String(255), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('assignment_id', 'student_id', name='unique_assignment_submission'),
+    )
+
+    def to_dict(self):
+        return {
+            'submission_id': self.submission_id,
+            'assignment_id': self.assignment_id,
+            'student_id': self.student_id,
+            'file_name': self.file_name,
+            'file_path': self.file_path,
+            'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
+            'marks_awarded': self.marks_awarded,
+            'feedback': self.feedback,
+        }
+
+

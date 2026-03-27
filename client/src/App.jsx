@@ -23,11 +23,13 @@ import MarkAttendance from './pages/MarkAttendance';
 import AttendanceReport from './pages/AttendanceReport';
 import EnterMarks from './pages/EnterMarks';
 import MarksReport from './pages/MarksReport';
+import FacultyAssignments from './pages/FacultyAssignments';
 
 // Student pages
 import MyAttendance from './pages/MyAttendance';
 import MyMarks from './pages/MyMarks';
 import MySubjects from './pages/MySubjects';
+import StudentAssignments from './pages/StudentAssignments';
 
 import './index.css';
 
@@ -59,11 +61,13 @@ function AppRoutes() {
         <Route path="/attendance-report" element={<ProtectedRoute roles={['FACULTY']}><AttendanceReport /></ProtectedRoute>} />
         <Route path="/enter-marks" element={<ProtectedRoute roles={['FACULTY']}><EnterMarks /></ProtectedRoute>} />
         <Route path="/marks-report" element={<ProtectedRoute roles={['FACULTY']}><MarksReport /></ProtectedRoute>} />
+        <Route path="/faculty-assignments" element={<ProtectedRoute roles={['FACULTY']}><FacultyAssignments /></ProtectedRoute>} />
 
         {/* Student */}
         <Route path="/my-attendance" element={<ProtectedRoute roles={['STUDENT']}><MyAttendance /></ProtectedRoute>} />
         <Route path="/my-marks" element={<ProtectedRoute roles={['STUDENT']}><MyMarks /></ProtectedRoute>} />
         <Route path="/my-subjects" element={<ProtectedRoute roles={['STUDENT']}><MySubjects /></ProtectedRoute>} />
+        <Route path="/my-assignments" element={<ProtectedRoute roles={['STUDENT']}><StudentAssignments /></ProtectedRoute>} />
       </Route>
 
       <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} />} />

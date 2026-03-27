@@ -7,7 +7,7 @@ import './Login.css';
 const demoAccounts = [
   { label: 'Dept Admin', email: 'admin_cse@abc.edu', password: 'password' },
   { label: 'Faculty', email: 'rao@abc.edu', password: 'password' },
-  { label: 'Student', email: 'student1@abc.edu', password: 'password' },
+  { label: 'Student', email: '22cs1a01@abc.edu', password: 'password' },
 ];
 
 export default function Login() {

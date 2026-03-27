@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import API from '../api/axios';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 
 export default function MarksReport() {
   const [allocations, setAllocations] = useState([]);
@@ -37,23 +36,6 @@ export default function MarksReport() {
 
       {selectedAlloc && report.length > 0 && (
         <>
-          <div className="card" style={{marginBottom:'20px'}}>
-            <h2 style={{fontSize:'1.1rem',fontWeight:700,marginBottom:'16px'}}>Overall Performance</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={report} margin={{top:5,right:20,left:0,bottom:5}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-200)" />
-                <XAxis dataKey="enrollment_no" fontSize={11} tick={{fill:'var(--gray-500)'}} />
-                <YAxis domain={[0, 100]} fontSize={12} tick={{fill:'var(--gray-500)'}} />
-                <Tooltip contentStyle={{borderRadius:'8px',border:'none',boxShadow:'var(--shadow-lg)'}} />
-                <Bar dataKey="overall_percentage" radius={[4,4,0,0]} name="Overall %">
-                  {report.map((entry, i) => (
-                    <Cell key={i} fill={entry.overall_percentage >= 60 ? '#10b981' : entry.overall_percentage >= 33 ? '#f59e0b' : '#ef4444'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
           <div className="card">
             <h2 style={{fontSize:'1.1rem',fontWeight:700,marginBottom:'16px'}}>Detailed Marks</h2>
             <div className="data-table-wrapper">

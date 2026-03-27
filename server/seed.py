@@ -6,6 +6,8 @@ from flask import Flask
 
 from config import Config
 from models import (
+    Assignment,
+    AssignmentSubmission,
     AttendanceRecord,
     AttendanceSession,
     Batch,
@@ -297,6 +299,8 @@ def seed():
         sessions = []
         records = []
         marks = []
+        assignments = []
+        submissions = []
         next_session_id = 1001
         base_date = date(2026, 1, 10)
         for section in sections:
@@ -323,7 +327,7 @@ def seed():
                         status='P' if idx % 4 != 0 else 'A',
                     )
                 )
-            for exam_type, max_marks in [('mid1', 30), ('assignment1', 10)]:
+            for exam_type, max_marks in [('mid1', 20), ('assignment1', 5)]:
                 for idx, student_id in enumerate(section_students[section.section_id]):
                     score_ratio = 0.55 + (idx * 0.08)
                     obtained_marks = round(min(max_marks, max_marks * score_ratio), 1)
@@ -337,10 +341,37 @@ def seed():
                             remarks='Seeded demo mark',
                         )
                     )
+            if section.section_id == 1:
+                assignment = Assignment(
+                    title='Operating Systems Notes Review',
+                    description='Download the notes and upload a short summary PDF.',
+                    subject_code=session_alloc.subject_code,
+                    batch_id=section.batch_id,
+                    section_id=section.section_id,
+                    faculty_id=session_alloc.faculty_id,
+                    due_date=base_date + timedelta(days=10),
+                    marks_slot='assignment1',
+                    max_marks=5,
+                    attachment_name='os-notes.pdf',
+                    attachment_path=None,
+                )
+                assignments.append(assignment)
             next_session_id += 1
         db.session.add_all(sessions)
         db.session.add_all(records)
         db.session.add_all(marks)
+        db.session.add_all(assignments)
+        db.session.flush()
+        if assignments:
+            submissions.append(AssignmentSubmission(
+                assignment_id=assignments[0].assignment_id,
+                student_id=section_students[1][0],
+                file_name='summary.pdf',
+                file_path=None,
+                marks_awarded=8,
+                feedback='Good start',
+            ))
+        db.session.add_all(submissions)
 
         db.session.commit()
 
@@ -358,7 +389,7 @@ def seed():
         print('Login Credentials:')
         print('Dept Admins: admin_cse@abc.edu / password, admin_mba@abc.edu / password, admin_cse@xyz.edu / password, admin@pqr.edu / password')
         print('Faculty: rao@abc.edu / password, sharma@abc.edu / password, patel@mba.edu / password')
-        print('Students: use any seeded student email with password')
+        print('Student: 22cs1a01@abc.edu / password')
 
 
 if __name__ == '__main__':
