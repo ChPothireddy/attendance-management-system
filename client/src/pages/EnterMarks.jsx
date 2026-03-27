@@ -38,7 +38,7 @@ export default function EnterMarks() {
   // Load existing marks
   useEffect(() => {
     if (!selectedAlloc || !examType) return;
-    API.get(`/faculty/marks?subject_id=${selectedAlloc.subject_id}&section_id=${selectedAlloc.section_id}&exam_type=${examType}`)
+    API.get(`/faculty/marks?subject_code=${selectedAlloc.subject_code}&section_id=${selectedAlloc.section_id}&exam_type=${examType}`)
       .then(r => {
         if (r.data.length > 0) {
           const existing = {};
@@ -67,7 +67,8 @@ export default function EnterMarks() {
         remarks: marks[s.id]?.remarks || '',
       }));
       await API.post('/faculty/marks', {
-        subject_id: selectedAlloc.subject_id,
+        subject_code: selectedAlloc.subject_code,
+        section_id: selectedAlloc.section_id,
         exam_type: examType,
         max_marks: maxMarks,
         records,

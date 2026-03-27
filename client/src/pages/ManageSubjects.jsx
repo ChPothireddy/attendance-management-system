@@ -5,12 +5,16 @@ import { HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi';
 
 export default function ManageSubjects() {
   const [subjects, setSubjects] = useState([]);
+  const [semesterFilter, setSemesterFilter] = useState('');
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState({ name: '', code: '', semester: 1, credits: 3 });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); }, [semesterFilter]);
 
-  const load = () => API.get('/department/subjects').then(r => setSubjects(r.data)).catch(() => {});
+  const load = () => {
+    const params = semesterFilter ? { semester: semesterFilter } : {};
+    return API.get('/department/subjects', { params }).then(r => setSubjects(r.data)).catch(() => {});
+  };
 
   const handleCreate = async (e) => {
     e.preventDefault();
@@ -23,9 +27,9 @@ export default function ManageSubjects() {
     } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
   };
 
-  const handleDelete = async (id) => {
+  const handleDelete = async (code) => {
     if (!confirm('Delete this subject?')) return;
-    try { await API.delete(`/department/subjects/${id}`); toast.success('Deleted'); load(); }
+    try { await API.delete(`/department/subjects/${code}`); toast.success('Deleted'); load(); }
     catch { toast.error('Failed'); }
   };
 
@@ -35,7 +39,13 @@ export default function ManageSubjects() {
       <div className="card">
         <div className="section-header">
           <h2>All Subjects</h2>
-          <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><HiOutlinePlus /> Add Subject</button>
+          <div style={{display:'flex', gap:'8px', alignItems:'center'}}>
+            <select className="form-control" style={{width:'170px'}} value={semesterFilter} onChange={e => setSemesterFilter(e.target.value)}>
+              <option value="">All Semesters</option>
+              {[1,2,3,4,5,6,7,8].map(s => <option key={s} value={s}>Semester {s}</option>)}
+            </select>
+            <button className="btn btn-primary btn-sm" onClick={() => setShowModal(true)}><HiOutlinePlus /> Add Subject</button>
+          </div>
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
@@ -43,12 +53,12 @@ export default function ManageSubjects() {
             <tbody>
               {subjects.length === 0 ? <tr><td colSpan="5" style={{textAlign:'center',padding:'40px',color:'var(--gray-400)'}}>No subjects</td></tr> :
               subjects.map(s => (
-                <tr key={s.id}>
+                <tr key={s.code}>
                   <td style={{fontWeight:600}}>{s.name}</td>
                   <td><span className="badge badge-info">{s.code}</span></td>
-                  <td>Sem {s.semester}</td>
-                  <td>{s.credits}</td>
-                  <td><button className="btn btn-danger btn-sm" onClick={() => handleDelete(s.id)}><HiOutlineTrash /></button></td>
+                  <td>{s.semester ? `Sem ${s.semester}` : 'N/A'}</td>
+                  <td>{s.credits ?? 'N/A'}</td>
+                  <td><button className="btn btn-danger btn-sm" onClick={() => handleDelete(s.code)}><HiOutlineTrash /></button></td>
                 </tr>
               ))}
             </tbody>

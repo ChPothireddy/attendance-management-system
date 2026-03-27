@@ -28,7 +28,7 @@ const navConfig = {
     { section: 'People' },
     { to: '/manage-faculty', label: 'Faculty', icon: HiOutlineAcademicCap },
     { to: '/manage-students', label: 'Students', icon: HiOutlineUserGroup },
-    { to: '/allocations', label: 'Allocations', icon: HiOutlineCog },
+    { to: '/allocations', label: 'Timetable', icon: HiOutlineCog },
   ],
   faculty: [
     { section: 'Overview' },
@@ -60,7 +60,7 @@ const roleLabels = {
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const items = navConfig[user?.role] || [];
+  const items = navConfig[user?.role?.toLowerCase()] || [];
 
   const handleLogout = () => {
     logout();
@@ -106,7 +106,7 @@ export default function Sidebar() {
           <div className="sidebar-avatar">{initials}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{user?.name}</div>
-            <div className="sidebar-user-role">{roleLabels[user?.role]}</div>
+            <div className="sidebar-user-role">{roleLabels[user?.role?.toLowerCase()]}</div>
           </div>
         </div>
         <button className="sidebar-logout" onClick={handleLogout}>

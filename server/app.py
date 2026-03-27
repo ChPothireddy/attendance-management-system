@@ -6,7 +6,7 @@ from models import db
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
+    CORS(app, origins=["*"])
     db.init_app(app)
 
     # Register blueprints

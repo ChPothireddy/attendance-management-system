@@ -6,9 +6,19 @@ import { HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi';
 export default function ManageFaculty() {
   const [faculty, setFaculty] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [allocatingFaculty, setAllocatingFaculty] = useState(null);
+  const [subjects, setSubjects] = useState([]);
+  const [batches, setBatches] = useState([]);
+  const [sections, setSections] = useState([]);
+  const [allocForm, setAllocForm] = useState({ batch_id: '', section_id: '', subject_code: '' });
   const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    API.get('/department/subjects').then(r => setSubjects(r.data)).catch(() => {});
+    API.get('/department/batches').then(r => setBatches(r.data)).catch(() => {});
+    API.get('/department/sections/flat').then(r => setSections(r.data)).catch(() => {});
+  }, []);
   const load = () => API.get('/department/faculty').then(r => setFaculty(r.data)).catch(() => {});
 
   const handleCreate = async (e) => {
@@ -28,6 +38,35 @@ export default function ManageFaculty() {
     catch { toast.error('Failed'); }
   };
 
+  const handleAllocate = (facultyId) => {
+    setAllocatingFaculty(facultyId);
+    setAllocForm({ batch_id: '', section_id: '', subject_code: '' });
+  };
+
+  const handleClearAllocations = async (facultyId) => {
+    if (!confirm('Clear all allocations for this faculty member?')) return;
+    try {
+      await API.delete(`/department/faculty/${facultyId}/allocations`);
+      toast.success('All allocations cleared');
+      load();
+    } catch (err) { toast.error('Failed to clear allocations'); }
+  };
+
+  const handleAllocSubmit = async (e) => {
+    e.preventDefault();
+    try {
+      const payload = {
+        batch_id: +allocForm.batch_id,
+        section_id: +allocForm.section_id,
+        subject_code: allocForm.subject_code,
+      };
+      await API.post(`/department/faculty/${allocatingFaculty}/allocations`, payload);
+      toast.success('Allocated');
+      setAllocatingFaculty(null);
+      load();
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
+  };
+
   return (
     <div className="page-container">
       <div className="page-header"><h1>Faculty</h1><p>Manage faculty members in your department</p></div>
@@ -38,15 +77,29 @@ export default function ManageFaculty() {
         </div>
         <div className="data-table-wrapper">
           <table className="data-table">
-            <thead><tr><th>Name</th><th>Email</th><th>Phone</th><th>Actions</th></tr></thead>
+            <thead><tr><th>ID</th><th>Name</th><th>Allocated Subjects (Section-Code)</th><th>Actions</th></tr></thead>
             <tbody>
               {faculty.length === 0 ? <tr><td colSpan="4" style={{textAlign:'center',padding:'40px',color:'var(--gray-400)'}}>No faculty</td></tr> :
               faculty.map(f => (
                 <tr key={f.id}>
-                  <td style={{fontWeight:600}}>{f.name}</td>
-                  <td>{f.email}</td>
-                  <td>{f.phone || '—'}</td>
-                  <td><button className="btn btn-danger btn-sm" onClick={() => handleDelete(f.id)}><HiOutlineTrash /></button></td>
+                  <td style={{fontWeight:600}}>{f.id}</td>
+                  <td>{f.name}</td>
+                  <td>
+                    <div style={{display:'flex', gap:'6px', flexWrap:'wrap'}}>
+                      {f.allocations.length === 0 ? 'None' : f.allocations.map((a, idx) => (
+                        <span key={idx} style={{background:'var(--blue-100)', color:'var(--blue-700)', padding:'4px 8px', borderRadius:'4px', fontSize:'12px', fontWeight:'500'}}>
+                          {a.display}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td>
+                    <div style={{display:'flex', gap:'4px'}}>
+                      <button className="btn btn-secondary btn-sm" onClick={() => handleAllocate(f.id)}>Allocate</button>
+                      <button className="btn btn-warning btn-sm" onClick={() => handleClearAllocations(f.id)} disabled={f.allocations.length === 0}>Clear All</button>
+                      <button className="btn btn-danger btn-sm" onClick={() => handleDelete(f.id)}><HiOutlineTrash /></button>
+                    </div>
+                  </td>
                 </tr>
               ))}
             </tbody>
@@ -65,6 +118,30 @@ export default function ManageFaculty() {
               </div>
               <div className="form-group"><label>Phone</label><input className="form-control" placeholder="Phone number" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
               <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button type="submit" className="btn btn-primary">Create</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+      {allocatingFaculty && (
+        <div className="modal-overlay" onClick={() => setAllocatingFaculty(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Allocate Subject</h2>
+            <form onSubmit={handleAllocSubmit}>
+              <div className="form-row">
+                <div className="form-group"><label>Batch</label><select className="form-control" value={allocForm.batch_id} onChange={e => setAllocForm({...allocForm, batch_id: e.target.value, section_id: ''})} required><option value="">Select batch</option>{batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
+                <div className="form-group"><label>Section</label><select className="form-control" value={allocForm.section_id} onChange={e => setAllocForm({...allocForm, section_id: e.target.value})} required disabled={!allocForm.batch_id}><option value="">Select section</option>{sections.filter(s => s.batch_id == allocForm.batch_id).map(s => <option key={s.id} value={s.id}>Sec {s.name} (Sem {s.current_semester})</option>)}</select></div>
+              </div>
+              <div className="form-group"><label>Subject</label><select className="form-control" value={allocForm.subject_code} onChange={e => setAllocForm({...allocForm, subject_code: e.target.value})} required>
+                <option value="">Select subject</option>
+                {subjects
+                  .filter(s => {
+                    if (!allocForm.section_id) return true;
+                    const section = sections.find(sec => sec.id == allocForm.section_id);
+                    return section ? s.semester == section.current_semester : true;
+                  })
+                  .map(s => <option key={s.code} value={s.code}>{s.code} - {s.name}</option>)}
+              </select></div>
+              <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setAllocatingFaculty(null)}>Cancel</button><button type="submit" className="btn btn-primary">Allocate</button></div>
             </form>
           </div>
         </div>

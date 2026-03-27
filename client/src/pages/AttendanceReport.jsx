@@ -15,7 +15,7 @@ export default function AttendanceReport() {
 
   useEffect(() => {
     if (!selectedAlloc) return;
-    API.get(`/faculty/attendance/report?subject_id=${selectedAlloc.subject_id}&section_id=${selectedAlloc.section_id}`)
+    API.get(`/faculty/attendance/report?subject_code=${selectedAlloc.subject_code}&section_id=${selectedAlloc.section_id}`)
       .then(r => setReport(r.data)).catch(() => {});
   }, [selectedAlloc]);
 
