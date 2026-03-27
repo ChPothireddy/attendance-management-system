@@ -2,14 +2,11 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Toaster } from 'react-hot-toast';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import ProtectedRoute from './components/ProtectedRoute';
+import Home from './pages/Home';
+import RegisterCollege from './pages/RegisterCollege';
 import Login from './pages/Login';
 import DashboardLayout from './pages/DashboardLayout';
 import Dashboard from './pages/Dashboard';
-
-// Super Admin pages
-import ManageBranches from './pages/ManageBranches';
-import ManageDeptAdmins from './pages/ManageDeptAdmins';
-import AllUsers from './pages/AllUsers';
 
 // Dept Admin pages
 import ManageSections from './pages/ManageSections';
@@ -38,16 +35,12 @@ function AppRoutes() {
 
   return (
     <Routes>
-      <Route path="/login" element={user ? <Navigate to="/dashboard" /> : <Login />} />
+      <Route path="/" element={user ? <Navigate to="/dashboard" replace /> : <Home />} />
+      <Route path="/register" element={user ? <Navigate to="/dashboard" replace /> : <RegisterCollege />} />
+      <Route path="/login" element={user ? <Navigate to="/dashboard" replace /> : <Login />} />
 
       <Route element={<ProtectedRoute><DashboardLayout /></ProtectedRoute>}>
         <Route path="/dashboard" element={<Dashboard />} />
-
-        {/* Super Admin */}
-        <Route path="/colleges" element={<ProtectedRoute roles={['DEPT_ADMIN']}><Dashboard /></ProtectedRoute>} />
-        <Route path="/branches" element={<ProtectedRoute roles={['DEPT_ADMIN']}><ManageBranches /></ProtectedRoute>} />
-        <Route path="/dept-admins" element={<ProtectedRoute roles={['DEPT_ADMIN']}><ManageDeptAdmins /></ProtectedRoute>} />
-        <Route path="/all-users" element={<ProtectedRoute roles={['DEPT_ADMIN']}><AllUsers /></ProtectedRoute>} />
 
         {/* Dept Admin */}
         <Route path="/sections" element={<ProtectedRoute roles={['DEPT_ADMIN']}><ManageSections /></ProtectedRoute>} />
@@ -70,7 +63,7 @@ function AppRoutes() {
         <Route path="/my-assignments" element={<ProtectedRoute roles={['STUDENT']}><StudentAssignments /></ProtectedRoute>} />
       </Route>
 
-      <Route path="*" element={<Navigate to={user ? '/dashboard' : '/login'} />} />
+      <Route path="*" element={<Navigate to={user ? '/dashboard' : '/'} replace />} />
     </Routes>
   );
 }

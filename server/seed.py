@@ -11,6 +11,7 @@ from models import (
     AttendanceRecord,
     AttendanceSession,
     Batch,
+    College,
     Department,
     Faculty,
     FacultyBatchSection,
@@ -54,14 +55,19 @@ def seed():
         db.drop_all()
         db.create_all()
 
+        colleges = [
+            College(college_id=1, college_name='ABC University'),
+        ]
+        db.session.add_all(colleges)
+
         departments = [
-            Department(dept_id=1, dept_name='CSE'),
-            Department(dept_id=2, dept_name='ECE'),
-            Department(dept_id=3, dept_name='MBA'),
-            Department(dept_id=4, dept_name='CSE'),
-            Department(dept_id=5, dept_name='ME'),
-            Department(dept_id=6, dept_name='CSE'),
-            Department(dept_id=7, dept_name='EEE'),
+            Department(dept_id=1, dept_name='CSE', college_id=1),
+            Department(dept_id=2, dept_name='ECE', college_id=1),
+            Department(dept_id=3, dept_name='MBA', college_id=1),
+            Department(dept_id=4, dept_name='CSE - XYZ Campus', college_id=1),
+            Department(dept_id=5, dept_name='ME', college_id=1),
+            Department(dept_id=6, dept_name='CSE - PQR Campus', college_id=1),
+            Department(dept_id=7, dept_name='EEE', college_id=1),
         ]
         db.session.add_all(departments)
 
@@ -176,10 +182,11 @@ def seed():
         db.session.add_all(subjects)
 
         users = [
-            User(user_id=1, email='admin_cse@abc.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='CSE Admin', dept_id=1),
-            User(user_id=2, email='admin_mba@abc.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='MBA Admin', dept_id=3),
-            User(user_id=3, email='admin_cse@xyz.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='CSE Admin XYZ', dept_id=4),
-            User(user_id=4, email='admin@pqr.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='PQR Admin', dept_id=6),
+            User(user_id=1, email='admin_cse@abc.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='CSE Admin', dept_id=1, college_id=1),
+            User(user_id=2, email='admin_mba@abc.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='MBA Admin', dept_id=3, college_id=1),
+            User(user_id=3, email='admin_cse@xyz.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='CSE Admin XYZ', dept_id=4, college_id=1),
+            User(user_id=4, email='admin@pqr.edu', role='DEPT_ADMIN', password_hash=hash_pw('password'), name='PQR Admin', dept_id=6, college_id=1),
+            User(user_id=5, email='superadmin@abc.edu', role='SUPER_ADMIN', password_hash=hash_pw('password'), name='ABC Super Admin', college_id=1),
         ]
 
         faculty_specs = [
@@ -199,7 +206,7 @@ def seed():
         faculties = []
         faculty_by_dept = {}
         for faculty_id, user_id, name, email, dept_id in faculty_specs:
-            users.append(User(user_id=user_id, email=email, role='FACULTY', password_hash=hash_pw('password'), name=name, dept_id=dept_id))
+            users.append(User(user_id=user_id, email=email, role='FACULTY', password_hash=hash_pw('password'), name=name, dept_id=dept_id, college_id=1))
             faculties.append(Faculty(faculty_id=faculty_id, user_id=user_id, dept_id=dept_id))
             faculty_by_dept.setdefault(dept_id, []).append(faculty_id)
         db.session.add_all(users)
@@ -248,6 +255,7 @@ def seed():
                         name=f'Student {roll_no}',
                         phone=phone,
                         dept_id=section.dept_id,
+                        college_id=1,
                     )
                 )
                 students.append(
@@ -368,7 +376,7 @@ def seed():
                 student_id=section_students[1][0],
                 file_name='summary.pdf',
                 file_path=None,
-                marks_awarded=8,
+                marks_awarded=4,
                 feedback='Good start',
             ))
         db.session.add_all(submissions)
@@ -387,6 +395,7 @@ def seed():
         print(f'Attendance Records: {AttendanceRecord.query.count()}')
         print()
         print('Login Credentials:')
+        print('Super Admin: superadmin@abc.edu / password')
         print('Dept Admins: admin_cse@abc.edu / password, admin_mba@abc.edu / password, admin_cse@xyz.edu / password, admin@pqr.edu / password')
         print('Faculty: rao@abc.edu / password, sharma@abc.edu / password, patel@mba.edu / password')
         print('Student: 22cs1a01@abc.edu / password')

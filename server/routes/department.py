@@ -303,7 +303,7 @@ def create_faculty(current_user):
     email = normalize_email(data['email'])
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already exists'}), 409
-    user = User(name=data['name'], email=email, password_hash=hash_password(data['password']), phone=data.get('phone'), role='FACULTY', dept_id=current_user.dept_id)
+    user = User(name=data['name'], email=email, password_hash=hash_password(data['password']), phone=data.get('phone'), role='FACULTY', dept_id=current_user.dept_id, college_id=current_user.college_id)
     db.session.add(user)
     db.session.flush()
     faculty = Faculty(user_id=user.user_id, dept_id=current_user.dept_id)
@@ -535,7 +535,7 @@ def create_student(current_user):
     if Student.query.filter_by(roll_no=roll_no, dept_id=current_user.dept_id).first():
         return jsonify({'error': 'Roll number already exists'}), 409
     phone = (data.get('phone') or '').strip()
-    user = User(name=data['name'].strip(), email=email, password_hash=hash_password(data['password']), phone=phone, role='STUDENT', dept_id=current_user.dept_id)
+    user = User(name=data['name'].strip(), email=email, password_hash=hash_password(data['password']), phone=phone, role='STUDENT', dept_id=current_user.dept_id, college_id=current_user.college_id)
     db.session.add(user)
     db.session.flush()
     student = Student(student_id=user.user_id, roll_no=roll_no, batch_id=batch_id, section_id=section_id, dept_id=current_user.dept_id, email=email, phone=phone)

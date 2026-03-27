@@ -175,3 +175,29 @@
   background: rgba(255,255,255,0.15);
   color: #fff;
 }
+.login-footer-link {
+  margin-top: 18px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 0.88rem;
+}
+
+.login-footer-link a {
+  color: #fef3c7;
+  font-weight: 600;
+}
+
+.register-card {
+  width: 520px;
+}
+
+.auth-page-register {
+  background: linear-gradient(135deg, #1f2937 0%, #0f766e 52%, #164e63 100%);
+}
+
+@media (max-width: 560px) {
+  .register-card {
+    width: 100%;
+    padding: 32px 22px;
+  }
+}

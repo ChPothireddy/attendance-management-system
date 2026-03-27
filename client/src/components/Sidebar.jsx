@@ -3,9 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import {
   HiOutlineHome, HiOutlineAcademicCap, HiOutlineUserGroup,
   HiOutlineClipboardList, HiOutlineChartBar, HiOutlineCog,
-  HiOutlineLogout, HiOutlineOfficeBuilding, HiOutlineBookOpen,
-  HiOutlineViewGrid, HiOutlineDocumentText, HiOutlineUsers,
-  HiOutlineCalendar, HiOutlinePencilAlt, HiOutlineDocumentAdd
+  HiOutlineLogout, HiOutlineBookOpen, HiOutlineDocumentText, HiOutlineUsers,
+  HiOutlineCalendar, HiOutlinePencilAlt, HiOutlineDocumentAdd, HiOutlineOfficeBuilding
 } from 'react-icons/hi';
 import './Sidebar.css';
 
@@ -13,17 +12,12 @@ const navConfig = {
   super_admin: [
     { section: 'Overview' },
     { to: '/dashboard', label: 'Dashboard', icon: HiOutlineHome },
-    { section: 'Management' },
-    { to: '/colleges', label: 'Colleges', icon: HiOutlineOfficeBuilding },
-    { to: '/branches', label: 'Branches', icon: HiOutlineViewGrid },
-    { to: '/dept-admins', label: 'Dept Admins', icon: HiOutlineUserGroup },
-    { to: '/all-users', label: 'All Users', icon: HiOutlineUsers },
   ],
   dept_admin: [
     { section: 'Overview' },
     { to: '/dashboard', label: 'Dashboard', icon: HiOutlineHome },
     { section: 'Department' },
-    { to: '/sections', label: 'Sections', icon: HiOutlineViewGrid },
+    { to: '/sections', label: 'Sections', icon: HiOutlineOfficeBuilding },
     { to: '/subjects', label: 'Subjects', icon: HiOutlineBookOpen },
     { section: 'People' },
     { to: '/manage-faculty', label: 'Faculty', icon: HiOutlineAcademicCap },

@@ -3,16 +3,32 @@ from datetime import datetime, timezone
 
 db = SQLAlchemy()
 
+
+class College(db.Model):
+    __tablename__ = 'colleges'
+    college_id = db.Column(db.Integer, primary_key=True)
+    college_name = db.Column(db.String(150), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.college_id,
+            'name': self.college_name,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
 # ── Departments ──────────────────────────────────────────────
 class Department(db.Model):
     __tablename__ = 'departments'
     dept_id = db.Column(db.Integer, primary_key=True)
     dept_name = db.Column(db.String(100), nullable=False)
+    college_id = db.Column(db.Integer, db.ForeignKey('colleges.college_id'), nullable=True)
 
     def to_dict(self):
         return {
             'id': self.dept_id,
             'name': self.dept_name,
+            'college_id': self.college_id,
         }
 
 # ── Programs ──────────────────────────────────────────────
@@ -84,6 +100,7 @@ class User(db.Model):
     name = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(20), nullable=True)
     dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=True)  # For DEPT_ADMIN
+    college_id = db.Column(db.Integer, db.ForeignKey('colleges.college_id'), nullable=True)
 
     def to_dict(self):
         return {
@@ -93,6 +110,7 @@ class User(db.Model):
             'name': self.name,
             'phone': self.phone,
             'dept_id': self.dept_id,
+            'college_id': self.college_id,
         }
 
 # ── Faculties ──────────────────────────────────────────────
