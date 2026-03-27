@@ -11,6 +11,7 @@ from models import (
     AssignmentSubmission,
     AttendanceRecord,
     AttendanceSession,
+    Batch,
     Faculty,
     FacultyBatchSection,
     Mark,
@@ -18,6 +19,7 @@ from models import (
     Semester,
     Student,
     Subject,
+    TimetableEntry,
     User,
     db,
 )
@@ -128,6 +130,43 @@ def get_stats(current_user):
         'assignments': assignments_count,
         'submissions': submissions_count,
     })
+
+
+@faculty_bp.route('/timetable', methods=['GET'])
+@token_required
+@role_required('FACULTY')
+def faculty_timetable(current_user):
+    faculty = get_faculty_profile(current_user)
+    if not faculty:
+        return jsonify({'error': 'Faculty not found'}), 404
+
+    entries = (
+        TimetableEntry.query
+        .filter_by(faculty_id=faculty.faculty_id)
+        .order_by(TimetableEntry.day_order.asc(), TimetableEntry.slot_index.asc())
+        .all()
+    )
+
+    result = []
+    for entry in entries:
+        section = db.session.get(Section, entry.section_id)
+        batch = db.session.get(Batch, entry.batch_id)
+        subject = db.session.get(Subject, entry.subject_code)
+        result.append({
+            'entry_id': entry.entry_id,
+            'day_order': entry.day_order,
+            'day_name': entry.day_name,
+            'slot_index': entry.slot_index,
+            'slot_label': entry.slot_label,
+            'section_id': entry.section_id,
+            'section_name': section.section_name if section else None,
+            'batch_id': entry.batch_id,
+            'batch_name': batch.batch_name if batch else None,
+            'subject_code': entry.subject_code,
+            'subject_name': subject.subject_name if subject else None,
+            'semester': section.current_semester if section else None,
+        })
+    return jsonify(result)
 
 
 @faculty_bp.route('/students/<int:section_id>', methods=['GET'])

@@ -21,6 +21,7 @@ import AttendanceReport from './pages/AttendanceReport';
 import EnterMarks from './pages/EnterMarks';
 import MarksReport from './pages/MarksReport';
 import FacultyAssignments from './pages/FacultyAssignments';
+import FacultyTimetable from './pages/FacultyTimetable';
 
 // Student pages
 import MyAttendance from './pages/MyAttendance';
@@ -55,6 +56,7 @@ function AppRoutes() {
         <Route path="/enter-marks" element={<ProtectedRoute roles={['FACULTY']}><EnterMarks /></ProtectedRoute>} />
         <Route path="/marks-report" element={<ProtectedRoute roles={['FACULTY']}><MarksReport /></ProtectedRoute>} />
         <Route path="/faculty-assignments" element={<ProtectedRoute roles={['FACULTY']}><FacultyAssignments /></ProtectedRoute>} />
+        <Route path="/faculty-timetable" element={<ProtectedRoute roles={['FACULTY']}><FacultyTimetable /></ProtectedRoute>} />
 
         {/* Student */}
         <Route path="/my-attendance" element={<ProtectedRoute roles={['STUDENT']}><MyAttendance /></ProtectedRoute>} />

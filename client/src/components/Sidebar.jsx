@@ -4,7 +4,7 @@ import {
   HiOutlineHome, HiOutlineAcademicCap, HiOutlineUserGroup,
   HiOutlineClipboardList, HiOutlineChartBar, HiOutlineCog,
   HiOutlineLogout, HiOutlineBookOpen, HiOutlineDocumentText, HiOutlineUsers,
-  HiOutlineCalendar, HiOutlinePencilAlt, HiOutlineDocumentAdd, HiOutlineOfficeBuilding
+  HiOutlineCalendar, HiOutlinePencilAlt, HiOutlineDocumentAdd, HiOutlineOfficeBuilding, HiOutlineTable
 } from 'react-icons/hi';
 import './Sidebar.css';
 
@@ -27,6 +27,7 @@ const navConfig = {
   faculty: [
     { section: 'Overview' },
     { to: '/dashboard', label: 'Dashboard', icon: HiOutlineHome },
+    { to: '/faculty-timetable', label: 'My Timetable', icon: HiOutlineTable },
     { section: 'Attendance' },
     { to: '/mark-attendance', label: 'Mark Attendance', icon: HiOutlineClipboardList },
     { to: '/attendance-report', label: 'Attendance Report', icon: HiOutlineChartBar },

@@ -33,7 +33,8 @@ def hash_pw(password):
 def build_subjects(dept_id, prefix, semester_topics):
     subjects = []
     for semester_no, topics in semester_topics.items():
-        for index, (name, credits) in enumerate(topics, start=1):
+        normalized_topics = ensure_minimum_subjects(semester_no, topics)
+        for index, (name, credits) in enumerate(normalized_topics, start=1):
             code = f'{prefix}{semester_no}{index:02d}'
             subjects.append(
                 Subject(
@@ -45,6 +46,39 @@ def build_subjects(dept_id, prefix, semester_topics):
                 )
             )
     return subjects
+
+
+def ensure_minimum_subjects(semester_no, topics):
+    normalized = list(topics)
+    has_lab = any('lab' in name.lower() or 'laboratory' in name.lower() for name, _ in normalized)
+
+    if not has_lab:
+        base_name = normalized[0][0] if normalized else f'Semester {semester_no} Core'
+        base_name = base_name.replace(' I', '').replace(' II', '').replace(' III', '').replace(' IV', '')
+        normalized.append((f'{base_name} Laboratory', 2))
+
+    extra_topics = [
+        ('Professional Communication', 2),
+        ('Skill Development Workshop', 2),
+        ('Tutorial and Problem Solving', 2),
+        ('Mini Project and Seminar', 2),
+        ('Library and Research Practice', 1),
+        ('Innovation and Design Thinking', 2),
+    ]
+
+    extra_index = 0
+    while len(normalized) < 7:
+        extra_name, credits = extra_topics[extra_index % len(extra_topics)]
+        candidate_name = extra_name if extra_index == 0 else f'{extra_name} {extra_index}'
+        existing_names = {name for name, _ in normalized}
+        while candidate_name in existing_names:
+            extra_index += 1
+            extra_name, credits = extra_topics[extra_index % len(extra_topics)]
+            candidate_name = f'{extra_name} {extra_index}'
+        normalized.append((candidate_name, credits))
+        extra_index += 1
+
+    return normalized
 
 
 def seed():
@@ -192,13 +226,21 @@ def seed():
         faculty_specs = [
             (10, 110, 'Rao', 'rao@abc.edu', 1),
             (11, 111, 'Sharma', 'sharma@abc.edu', 1),
+            (21, 121, 'Meena', 'meena@abc.edu', 1),
+            (22, 122, 'Kiran', 'kiran@abc.edu', 1),
             (12, 112, 'Patel', 'patel@mba.edu', 3),
             (13, 113, 'Jain', 'jain@mba.edu', 3),
+            (23, 123, 'Nisha', 'nisha@mba.edu', 3),
             (14, 114, 'Kumar', 'kumar@xyz.edu', 4),
+            (24, 124, 'Harsha', 'harsha@xyz.edu', 4),
             (15, 115, 'Anita', 'anita@pqr.edu', 6),
+            (25, 125, 'Bhanu', 'bhanu@pqr.edu', 6),
             (16, 116, 'Verma', 'verma@ece.edu', 2),
+            (26, 126, 'Lekha', 'lekha@ece.edu', 2),
             (17, 117, 'Yadav', 'yadav@me.edu', 5),
+            (27, 127, 'Mohan', 'mohan@me.edu', 5),
             (18, 118, 'Aggarwal', 'aggarwal@eee.edu', 7),
+            (28, 128, 'Deepa', 'deepa@eee.edu', 7),
             (19, 119, 'Gupta', 'gupta@abc.edu', 1),
             (20, 120, 'Singh', 'singh@xyz.edu', 4),
         ]
@@ -240,7 +282,7 @@ def seed():
             start_year = batch.batch_name.split('-')[0][2:]
             dept_code = roll_prefix_map[section.dept_id]
             roster = []
-            for idx in range(1, 6):
+            for idx in range(1, 13):
                 student_id = next_student_id
                 next_student_id += 1
                 roll_no = f'{start_year}{dept_code}{batch.batch_id}{section.section_name}{idx:02d}'
@@ -291,8 +333,7 @@ def seed():
         for section in sections:
             dept_faculty = faculty_by_dept.get(section.dept_id, [])
             dept_subjects = [subject for subject in subjects if subject.dept_id == section.dept_id and subject.semester == section.current_semester]
-            max_allocations = min(len(dept_faculty), 2)
-            for index, subject in enumerate(dept_subjects[:max_allocations]):
+            for index, subject in enumerate(dept_subjects):
                 faculty_id = dept_faculty[index % len(dept_faculty)]
                 allocations.append(
                     FacultyBatchSection(
@@ -315,48 +356,50 @@ def seed():
             section_allocations = [alloc for alloc in allocations if alloc.section_id == section.section_id]
             if not section_allocations:
                 continue
-            session_alloc = section_allocations[0]
             semester = semester_lookup[(section.batch_id, section.current_semester)]
-            session = AttendanceSession(
-                session_id=next_session_id,
-                semester_id=semester.semester_id,
-                batch_id=section.batch_id,
-                section_id=section.section_id,
-                faculty_id=session_alloc.faculty_id,
-                date=base_date + timedelta(days=section.section_id),
-                subject_code=session_alloc.subject_code,
-            )
-            sessions.append(session)
-            for idx, student_id in enumerate(section_students[section.section_id]):
-                records.append(
-                    AttendanceRecord(
-                        session_id=next_session_id,
-                        student_id=student_id,
-                        status='P' if idx % 4 != 0 else 'A',
-                    )
+            for offset, session_alloc in enumerate(section_allocations[:3]):
+                session = AttendanceSession(
+                    session_id=next_session_id,
+                    semester_id=semester.semester_id,
+                    batch_id=section.batch_id,
+                    section_id=section.section_id,
+                    faculty_id=session_alloc.faculty_id,
+                    date=base_date + timedelta(days=section.section_id + offset),
+                    subject_code=session_alloc.subject_code,
                 )
-            for exam_type, max_marks in [('mid1', 20), ('assignment1', 5)]:
+                sessions.append(session)
                 for idx, student_id in enumerate(section_students[section.section_id]):
-                    score_ratio = 0.55 + (idx * 0.08)
-                    obtained_marks = round(min(max_marks, max_marks * score_ratio), 1)
-                    marks.append(
-                        Mark(
+                    records.append(
+                        AttendanceRecord(
+                            session_id=next_session_id,
                             student_id=student_id,
-                            subject_code=session_alloc.subject_code,
-                            exam_type=exam_type,
-                            max_marks=max_marks,
-                            obtained_marks=obtained_marks,
-                            remarks='Seeded demo mark',
+                            status='P' if (idx + offset) % 5 != 0 else 'A',
                         )
                     )
+                next_session_id += 1
+            for subject_offset, session_alloc in enumerate(section_allocations[:3]):
+                for exam_type, max_marks in [('mid1', 20), ('mid2', 20), ('assignment1', 5), ('assignment2', 5)]:
+                    for idx, student_id in enumerate(section_students[section.section_id]):
+                        score_ratio = 0.52 + (idx * 0.03) + (subject_offset * 0.04)
+                        obtained_marks = round(min(max_marks, max_marks * score_ratio), 1)
+                        marks.append(
+                            Mark(
+                                student_id=student_id,
+                                subject_code=session_alloc.subject_code,
+                                exam_type=exam_type,
+                                max_marks=max_marks,
+                                obtained_marks=obtained_marks,
+                                remarks='Seeded average academic record',
+                            )
+                        )
             if section.section_id == 1:
                 assignment = Assignment(
                     title='Operating Systems Notes Review',
                     description='Download the notes and upload a short summary PDF.',
-                    subject_code=session_alloc.subject_code,
+                    subject_code=section_allocations[0].subject_code,
                     batch_id=section.batch_id,
                     section_id=section.section_id,
-                    faculty_id=session_alloc.faculty_id,
+                    faculty_id=section_allocations[0].faculty_id,
                     due_date=base_date + timedelta(days=10),
                     marks_slot='assignment1',
                     max_marks=5,
@@ -364,7 +407,6 @@ def seed():
                     attachment_path=None,
                 )
                 assignments.append(assignment)
-            next_session_id += 1
         db.session.add_all(sessions)
         db.session.add_all(records)
         db.session.add_all(marks)

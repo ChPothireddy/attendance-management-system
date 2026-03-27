@@ -133,7 +133,7 @@ class FacultyBatchSection(db.Model):
     faculty_id = db.Column(db.Integer, db.ForeignKey('faculties.faculty_id'), primary_key=True)
     batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), primary_key=True)
     section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), primary_key=True)
-    subject_code = db.Column(db.String(20), nullable=False)
+    subject_code = db.Column(db.String(20), primary_key=True)
 
     def to_dict(self):
         return {
@@ -277,6 +277,39 @@ class AssignmentSubmission(db.Model):
             'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
             'marks_awarded': self.marks_awarded,
             'feedback': self.feedback,
+        }
+
+
+class TimetableEntry(db.Model):
+    __tablename__ = 'timetable_entries'
+    entry_id = db.Column(db.Integer, primary_key=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    faculty_id = db.Column(db.Integer, db.ForeignKey('faculties.faculty_id'), nullable=False)
+    subject_code = db.Column(db.String(20), db.ForeignKey('subjects.subject_code'), nullable=False)
+    day_order = db.Column(db.Integer, nullable=False)
+    day_name = db.Column(db.String(12), nullable=False)
+    slot_index = db.Column(db.Integer, nullable=False)
+    slot_label = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.UniqueConstraint('section_id', 'day_order', 'slot_index', name='unique_section_day_slot'),
+        db.UniqueConstraint('faculty_id', 'day_order', 'slot_index', name='unique_faculty_day_slot'),
+    )
+
+    def to_dict(self):
+        return {
+            'entry_id': self.entry_id,
+            'section_id': self.section_id,
+            'batch_id': self.batch_id,
+            'faculty_id': self.faculty_id,
+            'subject_code': self.subject_code,
+            'day_order': self.day_order,
+            'day_name': self.day_name,
+            'slot_index': self.slot_index,
+            'slot_label': self.slot_label,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
 
