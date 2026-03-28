@@ -1,34 +1,31 @@
-.home-shell {
+﻿.home-shell {
   min-height: 100vh;
   padding: 40px 24px 56px;
-  background:
-    radial-gradient(circle at top left, rgba(245, 158, 11, 0.15), transparent 28%),
-    radial-gradient(circle at bottom right, rgba(14, 165, 233, 0.18), transparent 30%),
-    linear-gradient(145deg, #fff8eb 0%, #f8fafc 48%, #eef6ff 100%);
+  background: linear-gradient(180deg, #f6f8fa 0%, #eef2f5 100%);
 }
 
 .home-hero {
   max-width: 1240px;
   margin: 0 auto;
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(320px, 420px);
+  grid-template-columns: minmax(0, 1.15fr) minmax(320px, 420px);
   gap: 28px;
   align-items: center;
 }
 
 .home-copy h1 {
-  font-size: clamp(2.4rem, 5vw, 4.5rem);
-  line-height: 0.96;
+  font-size: clamp(2.4rem, 5vw, 4.1rem);
+  line-height: 1.02;
   letter-spacing: -0.04em;
-  max-width: 11ch;
-  color: #111827;
+  max-width: 12ch;
+  color: var(--gray-900);
   margin: 18px 0 16px;
 }
 
 .home-copy p {
   max-width: 620px;
-  font-size: 1.05rem;
-  color: #4b5563;
+  font-size: 1.02rem;
+  color: var(--gray-600);
 }
 
 .home-badge {
@@ -37,10 +34,10 @@
   gap: 10px;
   padding: 10px 14px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.7);
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  border: 1px solid var(--gray-200);
   font-weight: 600;
-  color: #92400e;
+  color: var(--primary-700);
   box-shadow: var(--shadow-sm);
 }
 
@@ -52,13 +49,14 @@
 }
 
 .home-panel {
-  background: linear-gradient(180deg, rgba(255,255,255,0.92), rgba(255,255,255,0.82));
-  border: 1px solid rgba(15, 23, 42, 0.08);
+  background: #ffffff;
+  border: 1px solid var(--gray-200);
 }
 
 .home-panel h2 {
   margin-bottom: 18px;
-  font-size: 1.2rem;
+  font-size: 1.15rem;
+  color: var(--gray-900);
 }
 
 .home-steps {
@@ -80,13 +78,13 @@
   align-items: center;
   justify-content: center;
   border-radius: 12px;
-  background: linear-gradient(135deg, #f59e0b, #ea580c);
-  color: white;
+  background: var(--gray-100);
+  color: var(--primary-700);
   font-weight: 700;
 }
 
 .home-steps p {
-  color: #374151;
+  color: var(--gray-700);
 }
 
 .home-highlights {
@@ -108,8 +106,8 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0ea5e9, #0284c7);
-  color: white;
+  background: var(--gray-100);
+  color: var(--primary-700);
   font-size: 1.5rem;
   margin-bottom: 16px;
 }
@@ -117,11 +115,11 @@
 .home-highlight-card h3 {
   font-size: 1.1rem;
   margin-bottom: 8px;
-  color: #111827;
+  color: var(--gray-900);
 }
 
 .home-highlight-card p {
-  color: #4b5563;
+  color: var(--gray-600);
 }
 
 @media (max-width: 960px) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+﻿import { useEffect, useMemo, useState } from 'react';
 import toast from 'react-hot-toast';
 import {
   HiOutlineAcademicCap,
@@ -7,6 +7,8 @@ import {
   HiOutlineUsers,
   HiOutlineSearch,
   HiOutlineClipboardList,
+  HiOutlineViewGrid,
+  HiOutlineUserCircle,
 } from 'react-icons/hi';
 import API from '../api/axios';
 
@@ -38,6 +40,7 @@ export default function SuperAdminDashboard() {
   const [stats, setStats] = useState({});
   const [college, setCollege] = useState(null);
   const [departments, setDepartments] = useState([]);
+  const [activeExplorer, setActiveExplorer] = useState('students');
   const [studentsExplorer, setStudentsExplorer] = useState({ departments: [], batches: [], sections: [], students: [] });
   const [facultyExplorer, setFacultyExplorer] = useState({ departments: [], faculty: [] });
   const [departmentForm, setDepartmentForm] = useState(initialDepartmentForm);
@@ -273,142 +276,183 @@ export default function SuperAdminDashboard() {
       </div>
 
       <div className="card" style={{ marginBottom: 24 }}>
-        <div className="section-header">
-          <h2>Students Explorer</h2>
-        </div>
-        <div className="toolbar">
-          <div className="toolbar-left" style={{ width: '100%' }}>
-            <select
-              className="form-control"
-              style={{ maxWidth: 240 }}
-              value={studentFilters.department_id}
-              onChange={(e) => setStudentFilters({ department_id: e.target.value, batch_id: '', section_id: '', search: studentFilters.search })}
-            >
-              <option value="">All Departments</option>
-              {studentsExplorer.departments.map((department) => (
-                <option key={department.id} value={department.id}>{department.name}</option>
-              ))}
-            </select>
-            <select
-              className="form-control"
-              style={{ maxWidth: 220 }}
-              value={studentFilters.batch_id}
-              onChange={(e) => setStudentFilters((current) => ({ ...current, batch_id: e.target.value, section_id: '' }))}
-            >
-              <option value="">All Batches</option>
-              {availableBatches.map((batch) => (
-                <option key={batch.id} value={batch.id}>{batch.name}</option>
-              ))}
-            </select>
-            <select
-              className="form-control"
-              style={{ maxWidth: 220 }}
-              value={studentFilters.section_id}
-              onChange={(e) => setStudentFilters((current) => ({ ...current, section_id: e.target.value }))}
-            >
-              <option value="">All Sections</option>
-              {availableSections.map((section) => (
-                <option key={section.id} value={section.id}>{section.name}</option>
-              ))}
-            </select>
-            <div style={{ position: 'relative', minWidth: 260, flex: 1 }}>
-              <HiOutlineSearch style={{ position: 'absolute', left: 12, top: 12, color: 'var(--gray-400)' }} />
-              <input
-                className="form-control"
-                style={{ paddingLeft: 36 }}
-                placeholder="Search roll no, batch, section, or name"
-                value={studentFilters.search}
-                onChange={(e) => setStudentFilters((current) => ({ ...current, search: e.target.value }))}
-              />
-            </div>
+        <div className="section-header" style={{ marginBottom: 18 }}>
+          <div>
+            <h2>Directory Sections</h2>
+            <p style={{ color: 'var(--gray-500)', fontSize: '0.92rem', marginTop: 4 }}>
+              Open one focused workspace at a time so student and faculty records are easier to manage.
+            </p>
           </div>
         </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Roll No</th>
-                <th>Name</th>
-                <th>Department</th>
-                <th>Batch</th>
-                <th>Section</th>
-                <th>Attendance %</th>
-                <th>Marks %</th>
-              </tr>
-            </thead>
-            <tbody>
-              {studentsExplorer.students.length === 0 ? (
-                <tr><td colSpan="7" style={{ textAlign: 'center', padding: 32 }}>No students found for the selected filters.</td></tr>
-              ) : studentsExplorer.students.map((student) => (
-                <tr key={student.student_id}>
-                  <td style={{ fontWeight: 700 }}>{student.roll_no}</td>
-                  <td>{student.name}</td>
-                  <td>{student.department_name}</td>
-                  <td>{student.batch_name}</td>
-                  <td>{student.section_name}</td>
-                  <td><PercentCell value={student.attendance_pct} /></td>
-                  <td><PercentCell value={student.marks_pct} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+        <div className="segmented-control">
+          <button
+            type="button"
+            className={`segmented-control-item ${activeExplorer === 'students' ? 'active' : ''}`}
+            onClick={() => setActiveExplorer('students')}
+          >
+            <HiOutlineViewGrid />
+            Students
+          </button>
+          <button
+            type="button"
+            className={`segmented-control-item ${activeExplorer === 'faculty' ? 'active' : ''}`}
+            onClick={() => setActiveExplorer('faculty')}
+          >
+            <HiOutlineUserCircle />
+            Faculty
+          </button>
         </div>
       </div>
 
-      <div className="card">
-        <div className="section-header">
-          <h2>Faculty Directory</h2>
-        </div>
-        <div className="toolbar">
-          <div className="toolbar-left" style={{ width: '100%' }}>
-            <select
-              className="form-control"
-              style={{ maxWidth: 240 }}
-              value={facultyFilters.department_id}
-              onChange={(e) => setFacultyFilters((current) => ({ ...current, department_id: e.target.value }))}
-            >
-              <option value="">All Departments</option>
-              {facultyExplorer.departments.map((department) => (
-                <option key={department.id} value={department.id}>{department.name}</option>
-              ))}
-            </select>
-            <div style={{ position: 'relative', minWidth: 260, flex: 1 }}>
-              <HiOutlineSearch style={{ position: 'absolute', left: 12, top: 12, color: 'var(--gray-400)' }} />
-              <input
-                className="form-control"
-                style={{ paddingLeft: 36 }}
-                placeholder="Search by department, faculty id, or faculty name"
-                value={facultyFilters.search}
-                onChange={(e) => setFacultyFilters((current) => ({ ...current, search: e.target.value }))}
-              />
+      {activeExplorer === 'students' ? (
+        <div className="card" style={{ marginBottom: 24 }}>
+          <div className="section-header">
+            <div>
+              <h2>Students Explorer</h2>
+              <p style={{ color: 'var(--gray-500)', fontSize: '0.92rem', marginTop: 4 }}>
+                Browse student records with department, batch, section, and roll number filters.
+              </p>
             </div>
           </div>
-        </div>
-        <div className="data-table-wrapper">
-          <table className="data-table">
-            <thead>
-              <tr>
-                <th>Faculty ID</th>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Department</th>
-              </tr>
-            </thead>
-            <tbody>
-              {facultyExplorer.faculty.length === 0 ? (
-                <tr><td colSpan="4" style={{ textAlign: 'center', padding: 32 }}>No faculty found for the selected filters.</td></tr>
-              ) : facultyExplorer.faculty.map((faculty) => (
-                <tr key={faculty.faculty_id}>
-                  <td style={{ fontWeight: 700 }}>{faculty.faculty_id}</td>
-                  <td>{faculty.name}</td>
-                  <td>{faculty.email}</td>
-                  <td>{faculty.department_name}</td>
+          <div className="toolbar">
+            <div className="toolbar-left" style={{ width: '100%' }}>
+              <select
+                className="form-control"
+                style={{ maxWidth: 240 }}
+                value={studentFilters.department_id}
+                onChange={(e) => setStudentFilters({ department_id: e.target.value, batch_id: '', section_id: '', search: studentFilters.search })}
+              >
+                <option value="">All Departments</option>
+                {studentsExplorer.departments.map((department) => (
+                  <option key={department.id} value={department.id}>{department.name}</option>
+                ))}
+              </select>
+              <select
+                className="form-control"
+                style={{ maxWidth: 220 }}
+                value={studentFilters.batch_id}
+                onChange={(e) => setStudentFilters((current) => ({ ...current, batch_id: e.target.value, section_id: '' }))}
+              >
+                <option value="">All Batches</option>
+                {availableBatches.map((batch) => (
+                  <option key={batch.id} value={batch.id}>{batch.name}</option>
+                ))}
+              </select>
+              <select
+                className="form-control"
+                style={{ maxWidth: 220 }}
+                value={studentFilters.section_id}
+                onChange={(e) => setStudentFilters((current) => ({ ...current, section_id: e.target.value }))}
+              >
+                <option value="">All Sections</option>
+                {availableSections.map((section) => (
+                  <option key={section.id} value={section.id}>{section.name}</option>
+                ))}
+              </select>
+              <div style={{ position: 'relative', minWidth: 260, flex: 1 }}>
+                <HiOutlineSearch style={{ position: 'absolute', left: 12, top: 12, color: 'var(--gray-400)' }} />
+                <input
+                  className="form-control"
+                  style={{ paddingLeft: 36 }}
+                  placeholder="Search roll no, batch, section, or name"
+                  value={studentFilters.search}
+                  onChange={(e) => setStudentFilters((current) => ({ ...current, search: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Roll No</th>
+                  <th>Name</th>
+                  <th>Department</th>
+                  <th>Batch</th>
+                  <th>Section</th>
+                  <th>Attendance %</th>
+                  <th>Marks %</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {studentsExplorer.students.length === 0 ? (
+                  <tr><td colSpan="7" style={{ textAlign: 'center', padding: 32 }}>No students found for the selected filters.</td></tr>
+                ) : studentsExplorer.students.map((student) => (
+                  <tr key={student.student_id}>
+                    <td style={{ fontWeight: 700 }}>{student.roll_no}</td>
+                    <td>{student.name}</td>
+                    <td>{student.department_name}</td>
+                    <td>{student.batch_name}</td>
+                    <td>{student.section_name}</td>
+                    <td><PercentCell value={student.attendance_pct} /></td>
+                    <td><PercentCell value={student.marks_pct} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
-      </div>
+      ) : (
+        <div className="card">
+          <div className="section-header">
+            <div>
+              <h2>Faculty Directory</h2>
+              <p style={{ color: 'var(--gray-500)', fontSize: '0.92rem', marginTop: 4 }}>
+                Search faculty by department, faculty ID, or name from a dedicated section.
+              </p>
+            </div>
+          </div>
+          <div className="toolbar">
+            <div className="toolbar-left" style={{ width: '100%' }}>
+              <select
+                className="form-control"
+                style={{ maxWidth: 240 }}
+                value={facultyFilters.department_id}
+                onChange={(e) => setFacultyFilters((current) => ({ ...current, department_id: e.target.value }))}
+              >
+                <option value="">All Departments</option>
+                {facultyExplorer.departments.map((department) => (
+                  <option key={department.id} value={department.id}>{department.name}</option>
+                ))}
+              </select>
+              <div style={{ position: 'relative', minWidth: 260, flex: 1 }}>
+                <HiOutlineSearch style={{ position: 'absolute', left: 12, top: 12, color: 'var(--gray-400)' }} />
+                <input
+                  className="form-control"
+                  style={{ paddingLeft: 36 }}
+                  placeholder="Search by department, faculty id, or faculty name"
+                  value={facultyFilters.search}
+                  onChange={(e) => setFacultyFilters((current) => ({ ...current, search: e.target.value }))}
+                />
+              </div>
+            </div>
+          </div>
+          <div className="data-table-wrapper">
+            <table className="data-table">
+              <thead>
+                <tr>
+                  <th>Faculty ID</th>
+                  <th>Name</th>
+                  <th>Email</th>
+                  <th>Department</th>
+                </tr>
+              </thead>
+              <tbody>
+                {facultyExplorer.faculty.length === 0 ? (
+                  <tr><td colSpan="4" style={{ textAlign: 'center', padding: 32 }}>No faculty found for the selected filters.</td></tr>
+                ) : facultyExplorer.faculty.map((faculty) => (
+                  <tr key={faculty.faculty_id}>
+                    <td style={{ fontWeight: 700 }}>{faculty.faculty_id}</td>
+                    <td>{faculty.name}</td>
+                    <td>{faculty.email}</td>
+                    <td>{faculty.department_name}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
