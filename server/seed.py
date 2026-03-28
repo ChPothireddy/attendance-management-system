@@ -26,8 +26,16 @@ from models import (
 )
 
 
+_password_cache = {}
+
+
 def hash_pw(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    cached = _password_cache.get(password)
+    if cached:
+        return cached
+    hashed = bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+    _password_cache[password] = hashed
+    return hashed
 
 
 def build_subjects(dept_id, prefix, semester_topics):
