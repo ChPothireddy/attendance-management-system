@@ -54,6 +54,8 @@ class Section(db.Model):
     current_semester = db.Column(db.Integer, nullable=True, default=1)
     batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
     dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
+    program_id = db.Column(db.Integer, db.ForeignKey('programs.program_id'), nullable=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (db.UniqueConstraint('section_name', 'batch_id', name='unique_section_batch'),)
 
@@ -64,6 +66,8 @@ class Section(db.Model):
             'current_semester': self.current_semester,
             'batch_id': self.batch_id,
             'dept_id': self.dept_id,
+            'program_id': self.program_id,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
         }
 
 # ── Subjects ──────────────────────────────────────────────
@@ -72,8 +76,12 @@ class Subject(db.Model):
     subject_code = db.Column(db.String(20), primary_key=True)
     subject_name = db.Column(db.String(100), nullable=False)
     semester = db.Column(db.Integer, nullable=True)
-    credits = db.Column(db.Integer, nullable=True)
+    credits = db.Column(db.Float, nullable=True)
+    periods = db.Column(db.Integer, nullable=True)
+    subject_type = db.Column(db.String(50), nullable=False, default='Common')
     dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=True)
+    program_id = db.Column(db.Integer, db.ForeignKey('programs.program_id'), nullable=True)
 
     def to_dict(self):
         return {
@@ -81,7 +89,11 @@ class Subject(db.Model):
             'name': self.subject_name,
             'semester': self.semester,
             'credits': self.credits,
+            'periods': self.periods,
+            'subject_type': self.subject_type,
             'dept_id': self.dept_id,
+            'batch_id': self.batch_id,
+            'program_id': self.program_id,
         }
 
 # ── Batch Sections ──────────────────────────────────────────────
@@ -89,6 +101,43 @@ class BatchSection(db.Model):
     __tablename__ = 'batch_sections'
     batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), primary_key=True)
     section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), primary_key=True)
+
+# ── Format Subject definitions (batch/sem level, defines format rules) ─────────────────────
+class SectionSubjectFormat(db.Model):
+    __tablename__ = 'section_subject_formats'
+    id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    semester = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (db.UniqueConstraint('batch_id', 'semester', name='unique_batch_semester_format'),)
+
+# ── Format subject line items (what is in the format) ─────────────────────
+class FormatSubject(db.Model):
+    __tablename__ = 'format_subjects'
+    id = db.Column(db.Integer, primary_key=True)
+    format_id = db.Column(db.Integer, db.ForeignKey('section_subject_formats.id'), nullable=False)
+    subject_code = db.Column(db.String(20), nullable=False)  # format slot code (e.g., CS3101)
+    subject_type = db.Column(db.String(50), nullable=False)
+    mapped_subject_code = db.Column(db.String(20), db.ForeignKey('subjects.subject_code'), nullable=True)  # only for Common slots
+
+    __table_args__ = (db.UniqueConstraint('format_id', 'subject_code', name='unique_format_subject'),)
+
+# ── Section subject assignment (section chooses from format for its electives) ─────────────────────
+class SectionSubjectAssignment(db.Model):
+    __tablename__ = 'section_subject_assignments'
+    id = db.Column(db.Integer, primary_key=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    semester = db.Column(db.Integer, nullable=False)
+    subject_code = db.Column(db.String(20), db.ForeignKey('subjects.subject_code'), nullable=False)
+    format_code = db.Column(db.String(20), nullable=True)
+    subject_type = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.UniqueConstraint('section_id', 'semester', 'subject_code', name='unique_section_semester_subject'),
+    )
 
 # ── Users ──────────────────────────────────────────────
 class User(db.Model):
@@ -153,6 +202,11 @@ class Student(db.Model):
     dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
     email = db.Column(db.String(120), nullable=False)
     phone = db.Column(db.String(20), nullable=False)
+    student_type = db.Column(db.String(20), nullable=False, default='Regular')
+    passport_number = db.Column(db.String(120), nullable=True)
+    category = db.Column(db.String(120), nullable=True)
+    entrance_marks = db.Column(db.Float, nullable=True, default=0.0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
 
     def to_dict(self):
         return {
@@ -163,6 +217,11 @@ class Student(db.Model):
             'dept_id': self.dept_id,
             'email': self.email,
             'phone': self.phone,
+            'student_type': self.student_type,
+            'passport_number': self.passport_number,
+            'category': self.category,
+            'entrance_marks': self.entrance_marks,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
 # ── Semesters ──────────────────────────────────────────────

@@ -33,10 +33,6 @@ export default function DeptAdminDashboard() {
           <div className="stat-icon pink"><HiOutlineUserGroup /></div>
           <div className="stat-info"><h3>{stats.students || 0}</h3><p>Students</p></div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon blue"><HiOutlineCog /></div>
-          <div className="stat-info"><h3>{stats.allocations || 0}</h3><p>Allocations</p></div>
-        </div>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:'20px'}}>

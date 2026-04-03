@@ -87,8 +87,16 @@ export default function ManageFaculty() {
                   <td>
                     <div style={{display:'flex', gap:'6px', flexWrap:'wrap'}}>
                       {f.allocations.length === 0 ? 'None' : f.allocations.map((a, idx) => (
-                        <span key={idx} style={{background:'var(--blue-100)', color:'var(--blue-700)', padding:'4px 8px', borderRadius:'4px', fontSize:'12px', fontWeight:'500'}}>
+                        <span key={idx} style={{background:'var(--blue-100)', color:'var(--blue-700)', padding:'4px 8px', borderRadius:'4px', fontSize:'12px', fontWeight:'500', display:'inline-flex', alignItems:'center', gap:'6px'}}>
                           {a.display}
+                          <button type="button" style={{border:'none', background:'transparent', color:'var(--red-600)', cursor:'pointer', fontWeight:'bold'}} onClick={async () => {
+                            if (!confirm('Delete this allocation?')) return;
+                            try {
+                              await API.delete('/department/allocations', { data: { faculty_id: f.id, batch_id: a.batch_id, section_id: a.section_id, subject_code: a.subject_code } });
+                              toast.success('Allocation removed');
+                              load();
+                            } catch (err) { toast.error(err.response?.data?.error || 'Failed to delete allocation'); }
+                          }}>×</button>
                         </span>
                       ))}
                     </div>

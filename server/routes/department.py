@@ -1,8 +1,10 @@
 import io
+import re
 from collections import Counter, defaultdict
+from datetime import datetime, timezone
 
 from flask import Blueprint, request, jsonify, make_response
-from models import db, User, Section, Batch, BatchSection, Faculty, FacultyBatchSection, Student, Department, College, AttendanceSession, AttendanceRecord, Subject, Semester, Program, Mark, TimetableEntry
+from models import db, User, Section, Batch, BatchSection, Faculty, FacultyBatchSection, Student, Department, College, AttendanceSession, AttendanceRecord, Subject, Semester, Program, Mark, TimetableEntry, SectionSubjectFormat, SectionSubjectAssignment, FormatSubject
 from auth import hash_password, normalize_email, token_required, role_required
 
 dept_bp = Blueprint('department', __name__, url_prefix='/api/department')
@@ -26,6 +28,89 @@ NON_TEACHING_LABELS = [
     'Seminar',
     'Club Activity',
 ]
+
+DEFAULT_SUBJECT_TYPES = ['Common', 'Elective', 'Open Elective']
+
+
+def normalize_subject_type(subject_type):
+    value = (subject_type or '').strip()
+    if not value:
+        return ''
+    lowered = value.lower()
+    if lowered == 'common':
+        return 'Common'
+    if lowered == 'elective':
+        return 'Elective'
+    if lowered in ('open elective', 'open-elective', 'open_elective'):
+        return 'Open Elective'
+    return value
+
+
+def get_dept_subject_prefix(dept_name):
+    tokens = re.findall(r'[A-Za-z]+', (dept_name or '').upper())
+    if not tokens:
+        return 'DP'
+    base = tokens[0]
+    # CSE -> CS, ECE -> EC, EEE -> EE
+    if len(base) >= 3 and base.endswith('E'):
+        base = base[:-1]
+    if len(base) < 2:
+        base = ''.join(tokens)
+    return (base[:3] or 'DP')
+
+
+def semester_to_year_sem(semester_no):
+    year_no = ((semester_no - 1) // 2) + 1
+    sem_in_year = 1 if semester_no % 2 == 1 else 2
+    return year_no, sem_in_year
+
+
+def subject_code_sort_key(code):
+    code_value = (code or '').upper()
+    match = re.match(r'^([A-Z]+)(\d+)$', code_value)
+    if not match:
+        return (code_value, 0)
+    prefix, number = match.groups()
+    return (prefix, int(number))
+
+
+def generate_subject_code_for_dept(dept_name, semester_no):
+    prefix = get_dept_subject_prefix(dept_name)
+    year_no, sem_in_year = semester_to_year_sem(semester_no)
+    code_base = f'{prefix}{year_no}{sem_in_year}'
+    matcher = re.compile(rf'^{re.escape(code_base)}(\d{{2}})$')
+    max_serial = 0
+    for (existing_code,) in db.session.query(Subject.subject_code).filter(Subject.subject_code.like(f'{code_base}%')).all():
+        match = matcher.match(existing_code or '')
+        if match:
+            max_serial = max(max_serial, int(match.group(1)))
+    next_serial = max_serial + 1
+    while True:
+        candidate = f'{code_base}{next_serial:02d}'
+        if not db.session.get(Subject, candidate):
+            return candidate
+        next_serial += 1
+
+
+def clear_batch_subject_setup(batch_id, section_ids=None):
+    format_ids_query = db.session.query(SectionSubjectFormat.id).filter_by(batch_id=batch_id)
+    format_ids = [row[0] for row in format_ids_query.all()]
+    if format_ids:
+        FormatSubject.query.filter(FormatSubject.format_id.in_(format_ids)).delete(synchronize_session=False)
+        SectionSubjectFormat.query.filter_by(batch_id=batch_id).delete(synchronize_session=False)
+
+    assignment_query = SectionSubjectAssignment.query
+    if section_ids:
+        assignment_query = assignment_query.filter(SectionSubjectAssignment.section_id.in_(section_ids))
+    else:
+        batch_section_ids = [row[0] for row in db.session.query(Section.section_id).filter_by(batch_id=batch_id).all()]
+        if batch_section_ids:
+            assignment_query = assignment_query.filter(SectionSubjectAssignment.section_id.in_(batch_section_ids))
+        else:
+            assignment_query = assignment_query.filter(False)
+    assignment_query.delete(synchronize_session=False)
+
+    TimetableEntry.query.filter_by(batch_id=batch_id).delete(synchronize_session=False)
 
 
 
@@ -228,13 +313,39 @@ def build_timetable_pdf(section, entries):
     return build_pdf_document('\n'.join(commands), page_width=page_width, page_height=page_height)
 
 
-def get_section_semester_subjects(dept_id, semester_no):
-    return (
-        Subject.query
-        .filter_by(dept_id=dept_id, semester=semester_no)
-        .order_by(Subject.subject_code.asc())
-        .all()
-    )
+def get_section_subject_format(batch_id, semester_no):
+    return SectionSubjectFormat.query.filter_by(batch_id=batch_id, semester=semester_no).first()
+
+
+def get_section_subject_assignments(section):
+    return SectionSubjectAssignment.query.filter_by(section_id=section.section_id, semester=section.current_semester).all()
+
+
+def get_section_semester_subjects(dept_id, section):
+    """Get all actual subjects assigned to this section for the active semester."""
+    assigned = SectionSubjectAssignment.query.filter_by(
+        section_id=section.section_id,
+        semester=section.current_semester
+    ).all()
+
+    if not assigned:
+        return []
+
+    assigned_codes = [a.subject_code for a in assigned]
+    assigned_subjects = Subject.query.filter(
+        Subject.subject_code.in_(assigned_codes),
+        Subject.dept_id == dept_id
+    ).all()
+    by_code = {subject.subject_code: subject for subject in assigned_subjects}
+    ordered = []
+    seen = set()
+    for item in assigned:
+        subject = by_code.get(item.subject_code)
+        if not subject or subject.subject_code in seen:
+            continue
+        ordered.append(subject)
+        seen.add(subject.subject_code)
+    return ordered
 
 
 def get_section_subject_allocations(section):
@@ -253,11 +364,11 @@ def get_weekly_class_target(subject_count):
 
 
 def validate_section_timetable_readiness(section, dept_id):
-    semester_subjects = get_section_semester_subjects(dept_id, section.current_semester)
+    semester_subjects = get_section_semester_subjects(dept_id, section)
     if not semester_subjects:
         return {
             'ready': False,
-            'error': 'No subjects found for the current semester',
+            'error': 'No subjects assigned for this section. Please assign subjects first.',
             'subjects': [],
             'allocations': {},
             'missing_subjects': [],
@@ -361,6 +472,13 @@ def generate_section_timetable(section, subjects, allocation_map):
                     continue
                 if session['faculty_id'] in busy_slots.get(slot_key, set()):
                     continue
+                # no two consecutive theory sessions for same faculty
+                prev_slot = (day_order, slot_index - 1)
+                if slot_index > 0 and prev_slot in assigned_slots:
+                    prev_session = assigned_slots[prev_slot]
+                    if prev_session['faculty_id'] == session['faculty_id']:
+                        continue
+
                 ranking = (
                     day_load[day_order] >= max_day_load,
                     subject_day_usage[(session['subject_code'], day_order)] > 0,
@@ -511,23 +629,73 @@ def create_batch(current_user):
     required = ['name', 'program_id']
     if not data or not all(data.get(k) for k in required):
         return jsonify({'error': 'name and program_id are required'}), 400
-    if Batch.query.filter_by(batch_name=data['name'], dept_id=current_user.dept_id).first():
+    existing = Batch.query.filter_by(batch_name=data['name'], dept_id=current_user.dept_id).first()
+    if existing:
         return jsonify({'error': 'Batch name already exists in this department'}), 409
+
+    program = db.session.get(Program, data['program_id'])
+    if not program:
+        return jsonify({'error': 'Invalid program_id'}), 400
+
+    # Academic range validation: e.g., 2023-25 => 2-year, 2021-25 => 4-year
+    year_match = re.match(r'^(?P<start>\d{4})-(?P<end>\d{2,4})$', str(data['name']).strip())
+    if year_match:
+        start_year = int(year_match.group('start'))
+        end_part = year_match.group('end')
+        end_year = int(end_part) if len(end_part) == 4 else int(str(start_year)[:2] + end_part)
+        year_span = end_year - start_year
+        expected_year_span = program.duration_semesters // 2
+        if year_span != expected_year_span:
+            return jsonify({'error': f'Batch duration mismatch: program is {program.duration_semesters} semesters, so batch, e.g. should span {expected_year_span} years.'}), 400
+
     batch = Batch(batch_name=data['name'], dept_id=current_user.dept_id, program_id=data['program_id'])
     db.session.add(batch)
     db.session.flush()
-    program = db.session.get(Program, batch.program_id)
-    duration = program.duration_semesters if program else 8
+    duration = program.duration_semesters
     for semester_no in range(1, duration + 1):
         db.session.add(Semester(batch_id=batch.batch_id, semester_no=semester_no, is_active=(semester_no == 1)))
     db.session.commit()
     return jsonify({'id': batch.batch_id, 'name': batch.batch_name}), 201
+
+
+@dept_bp.route('/sections/delete_group', methods=['DELETE'])
+@token_required
+@role_required('DEPT_ADMIN')
+def delete_group_sections(current_user):
+    data = request.get_json() or {}
+    batch_id = data.get('batch_id')
+    program_id = data.get('program_id')
+    if not batch_id or not program_id:
+        return jsonify({'error': 'batch_id and program_id are required'}), 400
+    sections = Section.query.filter_by(batch_id=batch_id, program_id=program_id, dept_id=current_user.dept_id).all()
+    if not sections:
+        return jsonify({'message': 'No sections found for this batch/program', 'deleted': 0})
+    deleted = len(sections)
+    for s in sections:
+        # also clear related students and timetable entries in this section
+        Student.query.filter_by(section_id=s.section_id).delete()
+        TimetableEntry.query.filter_by(section_id=s.section_id).delete()
+        db.session.delete(s)
+    db.session.commit()
+    return jsonify({'message': f'Deleted {deleted} section(s) for batch/program', 'deleted': deleted})
 
 @dept_bp.route('/programs', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
 def get_programs(current_user):
     return jsonify([{'id': p.program_id, 'name': p.program_name, 'duration_semesters': p.duration_semesters} for p in Program.query.all()])
+
+@dept_bp.route('/programs', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def create_program(current_user):
+    data = request.get_json()
+    if not data or not data.get('name'):
+        return jsonify({'error': 'Program name required'}), 400
+    program = Program(program_name=data['name'], duration_semesters=data.get('duration_semesters', 8))
+    db.session.add(program)
+    db.session.commit()
+    return jsonify({'id': program.program_id, 'name': program.program_name, 'duration_semesters': program.duration_semesters}), 201
 
 @dept_bp.route('/stats', methods=['GET'])
 @token_required
@@ -551,19 +719,36 @@ def get_stats(current_user):
 @token_required
 @role_required('DEPT_ADMIN')
 def get_sections(current_user):
-    # Group sections by batch for batch-level view
-    batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
+    sections = (
+        Section.query
+        .join(Batch, Section.batch_id == Batch.batch_id)
+        .filter_by(dept_id=current_user.dept_id)
+        .order_by(Batch.batch_name.asc(), Section.current_semester.asc(), Section.section_name.asc())
+        .all()
+    )
+
     result = []
-    for batch in batches:
-        sections = Section.query.filter_by(batch_id=batch.batch_id, dept_id=current_user.dept_id).all()
-        if sections:
-            result.append({
-                'batch_id': batch.batch_id,
-                'batch_name': batch.batch_name,
-                'section_count': len(sections),
-                'sections': [{'id': s.section_id, 'name': s.section_name, 'current_semester': s.current_semester} for s in sections],
-                'current_semester': sections[0].current_semester if sections else 1,
-            })
+    now = datetime.now(timezone.utc)
+    for s in sections:
+        batch = db.session.get(Batch, s.batch_id)
+        program = db.session.get(Program, s.program_id or (batch.program_id if batch else None))
+        recently_updated = False
+        if s.updated_at:
+            try:
+                recently_updated = (now - s.updated_at).days <= 30
+            except Exception:
+                recently_updated = False
+        result.append({
+            'id': s.section_id,
+            'name': s.section_name,
+            'batch_id': s.batch_id,
+            'batch_name': batch.batch_name if batch else None,
+            'program_id': program.program_id if program else None,
+            'program_name': program.program_name if program else None,
+            'current_semester': s.current_semester,
+            'updated_at': s.updated_at.isoformat() if s.updated_at else None,
+            'recently_updated': recently_updated,
+        })
     return jsonify(result)
 
 @dept_bp.route('/sections', methods=['POST'])
@@ -580,17 +765,23 @@ def create_section(current_user):
     batch = db.session.get(Batch, data['batch_id'])
     if not batch or batch.dept_id != current_user.dept_id:
         return jsonify({'error': 'Invalid batch'}), 400
+    program = db.session.get(Program, batch.program_id)
+    if not program:
+        return jsonify({'error': 'Invalid program associated with selected batch'}), 400
+
     section = Section(
         section_name=data['name'],
         current_semester=data.get('current_semester', 1),
         batch_id=data['batch_id'],
-        dept_id=current_user.dept_id
+        dept_id=current_user.dept_id,
+        program_id=batch.program_id,
     )
     db.session.add(section)
     sync_batch_active_semester(section.batch_id, section.current_semester or 1)
     db.session.commit()
     result = section.to_dict()
     result['batch_name'] = batch.batch_name if batch else None
+    result['program_name'] = program.program_name if program else None
     return jsonify(result), 201
 
 @dept_bp.route('/sections/<int:section_id>', methods=['PUT'])
@@ -600,21 +791,44 @@ def update_section(current_user, section_id):
     section = db.session.get(Section, section_id)
     if not section or section.dept_id != current_user.dept_id:
         return jsonify({'error': 'Section not found'}), 404
-    data = request.get_json()
-    if data.get('current_semester') is not None:
-        section.current_semester = data['current_semester']
+    data = request.get_json() or {}
+    old_semester = section.current_semester
+    old_batch_id = section.batch_id
+
+    if data.get('increment_semester'):
+        section.current_semester = (section.current_semester or 1) + 1
+    elif data.get('current_semester') is not None:
+        section.current_semester = int(data['current_semester'])
+
     if data.get('batch_id') is not None:
-        # Check if new batch_id is in same dept
         batch = db.session.get(Batch, data['batch_id'])
         if not batch or batch.dept_id != current_user.dept_id:
             return jsonify({'error': 'Invalid batch'}), 400
         section.batch_id = data['batch_id']
+
+    if data.get('program_id') is not None:
+        program = db.session.get(Program, data['program_id'])
+        if not program:
+            return jsonify({'error': 'Invalid program'}), 400
+        section.program_id = data['program_id']
+
+    semester_changed = old_semester != section.current_semester
+    batch_changed = old_batch_id != section.batch_id
+    if semester_changed or batch_changed:
+        clear_batch_subject_setup(old_batch_id, section_ids=[section.section_id])
+        if batch_changed:
+            clear_batch_subject_setup(section.batch_id, section_ids=[section.section_id])
+
+    section.updated_at = datetime.now(timezone.utc)
     TimetableEntry.query.filter_by(section_id=section.section_id).delete()
     sync_batch_active_semester(section.batch_id, section.current_semester or 1)
     db.session.commit()
     batch = db.session.get(Batch, section.batch_id)
+    program = db.session.get(Program, section.program_id or (batch.program_id if batch else None))
+
     result = section.to_dict()
     result['batch_name'] = batch.batch_name if batch else None
+    result['program_name'] = program.program_name if program else None
     return jsonify(result)
 
 @dept_bp.route('/sections/<int:section_id>', methods=['DELETE'])
@@ -658,11 +872,17 @@ def update_batch_sections(current_user, batch_id):
     data = request.get_json()
     if not data or not data.get('current_semester'):
         return jsonify({'error': 'current_semester is required'}), 400
+    new_semester = int(data['current_semester'])
     sections = Section.query.filter_by(batch_id=batch_id, dept_id=current_user.dept_id).all()
+    semester_changed = any((section.current_semester or 1) != new_semester for section in sections)
+    if semester_changed:
+        section_ids = [section.section_id for section in sections]
+        clear_batch_subject_setup(batch_id, section_ids=section_ids)
+
     for s in sections:
-        s.current_semester = data['current_semester']
+        s.current_semester = new_semester
         TimetableEntry.query.filter_by(section_id=s.section_id).delete()
-    sync_batch_active_semester(batch_id, data['current_semester'])
+    sync_batch_active_semester(batch_id, new_semester)
     db.session.commit()
     return jsonify({'message': f'Updated {len(sections)} sections', 'count': len(sections)})
 
@@ -686,36 +906,110 @@ def delete_batch_sections(current_user, batch_id):
 @role_required('DEPT_ADMIN')
 def get_subjects(current_user):
     query = Subject.query.filter_by(dept_id=current_user.dept_id)
-    semester = request.args.get('semester')
-    if semester:
+    batch_id = request.args.get('batch_id')
+    program_id = request.args.get('program_id')
+    section_id = request.args.get('section_id')
+    if batch_id:
         try:
-            semester = int(semester)
-            query = query.filter_by(semester=semester)
+            query = query.filter_by(batch_id=int(batch_id))
         except ValueError:
             pass
-    subjects = query.order_by(Subject.semester.asc(), Subject.subject_code.asc()).all()
+    if program_id:
+        try:
+            query = query.filter_by(program_id=int(program_id))
+        except ValueError:
+            pass
+    subject_type = request.args.get('subject_type') or request.args.get('type')
+    if subject_type:
+        query = query.filter_by(subject_type=subject_type)
+    if section_id:
+        try:
+            selected_section = db.session.get(Section, int(section_id))
+            if not selected_section or selected_section.dept_id != current_user.dept_id:
+                return jsonify({'error': 'Section not found'}), 404
+            assigned_codes = db.session.query(SectionSubjectAssignment.subject_code).filter_by(
+                section_id=selected_section.section_id,
+                semester=selected_section.current_semester
+            ).distinct().subquery()
+            query = query.filter(Subject.subject_code.in_(assigned_codes))
+        except ValueError:
+            pass
+
+    subjects = query.order_by(Subject.subject_type.asc(), Subject.subject_code.asc()).all()
     return jsonify([{
         'code': s.subject_code,
         'name': s.subject_name,
         'semester': s.semester,
         'credits': s.credits,
+        'periods': s.periods,
+        'subject_type': s.subject_type,
+        'batch_id': s.batch_id,
+        'program_id': s.program_id,
     } for s in subjects])
+
+
+@dept_bp.route('/subjects/types', methods=['GET'])
+@token_required
+@role_required('DEPT_ADMIN')
+def get_subject_types(current_user):
+    types = {normalize_subject_type(row[0]) for row in db.session.query(Subject.subject_type).filter_by(dept_id=current_user.dept_id).distinct().all() if row[0]}
+    for default_type in DEFAULT_SUBJECT_TYPES:
+        types.add(default_type)
+    return jsonify(sorted(types))
+
 
 @dept_bp.route('/subjects', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
 def create_subject(current_user):
     data = request.get_json()
-    required = ['code', 'name', 'semester', 'credits']
+    required = ['name', 'subject_type', 'credits', 'periods']
     if not data or not all(data.get(k) for k in required):
-        return jsonify({'error': 'code, name, semester, credits are required'}), 400
-    code = data['code'].strip().upper()
-    if db.session.get(Subject, code):
-        return jsonify({'error': 'Subject code already exists'}), 409
-    subject = Subject(subject_code=code, subject_name=data['name'], semester=data['semester'], credits=data['credits'], dept_id=current_user.dept_id)
+        return jsonify({'error': 'name, subject_type, credits, periods are required'}), 400
+    normalized_type = normalize_subject_type(data.get('subject_type'))
+    if not normalized_type:
+        return jsonify({'error': 'subject_type is required'}), 400
+
+    semester = None
+    batch_id = int(data.get('batch_id')) if data.get('batch_id') else None
+    program_id = int(data.get('program_id')) if data.get('program_id') else None
+    if batch_id:
+        active_sem = Semester.query.filter_by(batch_id=batch_id, is_active=True).first()
+        semester = active_sem.semester_no if active_sem else 1
+    if semester is None:
+        dept_batch_ids = [row[0] for row in db.session.query(Batch.batch_id).filter_by(dept_id=current_user.dept_id).all()]
+        if dept_batch_ids:
+            dept_active = Semester.query.filter(
+                Semester.batch_id.in_(dept_batch_ids),
+                Semester.is_active.is_(True)
+            ).order_by(Semester.batch_id.asc()).first()
+            semester = dept_active.semester_no if dept_active else 1
+    if semester is None:
+        semester = 1
+
+    provided_code = (data.get('code') or '').strip().upper()
+    if provided_code:
+        code = provided_code
+        if db.session.get(Subject, code):
+            return jsonify({'error': 'Subject code already exists'}), 409
+    else:
+        department = db.session.get(Department, current_user.dept_id)
+        code = generate_subject_code_for_dept(department.dept_name if department else '', semester)
+
+    subject = Subject(
+        subject_code=code,
+        subject_name=data['name'],
+        semester=None,
+        credits=float(data['credits']),
+        periods=int(data['periods']),
+        subject_type=normalized_type,
+        dept_id=current_user.dept_id,
+        batch_id=batch_id,
+        program_id=program_id,
+    )
     db.session.add(subject)
     db.session.commit()
-    return jsonify({'subject_code': subject.subject_code, 'subject_name': subject.subject_name, 'semester': subject.semester, 'credits': subject.credits}), 201
+    return jsonify({'subject_code': subject.subject_code, 'subject_name': subject.subject_name, 'semester': subject.semester, 'credits': subject.credits, 'subject_type': subject.subject_type}), 201
 
 @dept_bp.route('/subjects/<subject_code>', methods=['DELETE'])
 @token_required
@@ -727,6 +1021,337 @@ def delete_subject(current_user, subject_code):
     db.session.delete(subject)
     db.session.commit()
     return jsonify({'message': 'Subject deleted'})
+
+
+@dept_bp.route('/batch-programs', methods=['GET'])
+@token_required
+@role_required('DEPT_ADMIN')
+def get_batch_programs(current_user):
+    """Get all batch-program combinations with section and semester info"""
+    batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
+    result = []
+    for batch in batches:
+        program = db.session.get(Program, batch.program_id)
+        sections = Section.query.filter_by(batch_id=batch.batch_id).all()
+        active_sem = Semester.query.filter_by(batch_id=batch.batch_id, is_active=True).first()
+        result.append({
+            'batch_id': batch.batch_id,
+            'batch_name': batch.batch_name,
+            'program_id': program.program_id if program else None,
+            'program_name': program.program_name if program else None,
+            'current_semester': active_sem.semester_no if active_sem else 1,
+            'section_count': len(sections),
+            'sections': [{'id': s.section_id, 'name': s.section_name, 'semester': s.current_semester} for s in sections],
+        })
+    return jsonify(result)
+
+
+@dept_bp.route('/subjects/formats', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def define_subject_format(current_user):
+    """Define slot-based subject format for a batch/semester."""
+    data = request.get_json() or {}
+    batch_id = data.get('batch_id')
+    semester = data.get('semester')
+    subjects_list = data.get('subjects', [])  # list of {code, type, subject_code?}
+
+    if not batch_id or not semester:
+        return jsonify({'error': 'batch_id and semester are required'}), 400
+
+    batch = db.session.get(Batch, batch_id)
+    if not batch or batch.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Invalid batch'}), 400
+
+    try:
+        semester = int(semester)
+    except (ValueError, TypeError):
+        return jsonify({'error': 'semester must be an integer'}), 400
+
+    # Get or create format
+    fmt = SectionSubjectFormat.query.filter_by(batch_id=batch_id, semester=semester).first()
+    if not fmt:
+        fmt = SectionSubjectFormat(batch_id=batch_id, semester=semester)
+        db.session.add(fmt)
+        db.session.flush()
+
+    # Clear and rebuild subject list
+    FormatSubject.query.filter_by(format_id=fmt.id).delete()
+
+    seen_codes = set()
+    for item in subjects_list:
+        format_code = item.get('code', '').strip().upper()
+        subject_type = normalize_subject_type(item.get('type'))
+        mapped_subject_code = (item.get('subject_code') or '').strip().upper() or None
+
+        if not format_code or not subject_type:
+            continue
+        if format_code in seen_codes:
+            continue
+
+        if subject_type == 'Common':
+            if not mapped_subject_code:
+                return jsonify({'error': f'Common slot {format_code} must include a subject selection'}), 400
+            mapped_subject = db.session.get(Subject, mapped_subject_code)
+            if not mapped_subject or mapped_subject.dept_id != current_user.dept_id:
+                return jsonify({'error': f'Subject {mapped_subject_code} not found'}), 400
+            if normalize_subject_type(mapped_subject.subject_type) != 'Common':
+                return jsonify({'error': f'Subject {mapped_subject_code} must be Common type'}), 400
+        else:
+            mapped_subject_code = None
+
+        db.session.add(FormatSubject(
+            format_id=fmt.id,
+            subject_code=format_code,
+            subject_type=subject_type,
+            mapped_subject_code=mapped_subject_code,
+        ))
+        seen_codes.add(format_code)
+
+    # Format updates invalidate section-level optional picks for this batch/semester.
+    section_ids = [row[0] for row in db.session.query(Section.section_id).filter_by(batch_id=batch_id).all()]
+    if section_ids:
+        SectionSubjectAssignment.query.filter(
+            SectionSubjectAssignment.section_id.in_(section_ids),
+            SectionSubjectAssignment.semester == semester
+        ).delete(synchronize_session=False)
+        TimetableEntry.query.filter(
+            TimetableEntry.section_id.in_(section_ids)
+        ).delete(synchronize_session=False)
+
+    fmt.updated_at = datetime.now(timezone.utc)
+    db.session.commit()
+    return jsonify({'message': 'Format defined', 'format_id': fmt.id}), 201
+
+
+@dept_bp.route('/subjects/formats/<int:batch_id>/<int:semester>', methods=['GET'])
+@token_required
+@role_required('DEPT_ADMIN')
+def get_format_details(current_user, batch_id, semester):
+    """Get slot format details and available subjects grouped by subject type."""
+    batch = db.session.get(Batch, batch_id)
+    if not batch or batch.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Invalid batch'}), 400
+
+    # Get the format if it exists
+    fmt = SectionSubjectFormat.query.filter_by(batch_id=batch_id, semester=semester).first()
+    format_subjects = []
+    available_types = set()
+    if fmt:
+        format_items = FormatSubject.query.filter_by(format_id=fmt.id).all()
+        for item in format_items:
+            mapped_subject = db.session.get(Subject, item.mapped_subject_code) if item.mapped_subject_code else None
+            available_types.add(normalize_subject_type(item.subject_type))
+            format_subjects.append({
+                'code': item.subject_code,
+                'type': item.subject_type,
+                'subject_code': item.mapped_subject_code,
+                'subject_name': mapped_subject.subject_name if mapped_subject else None,
+            })
+        format_subjects = sorted(format_subjects, key=lambda item: subject_code_sort_key(item.get('code')))
+
+    semester_subjects = Subject.query.filter_by(
+        dept_id=current_user.dept_id
+    ).order_by(Subject.subject_type.asc(), Subject.subject_code.asc()).all()
+
+    subjects_by_type = defaultdict(list)
+    for subject in semester_subjects:
+        normalized_type = normalize_subject_type(subject.subject_type)
+        available_types.add(normalized_type)
+        subjects_by_type[normalized_type].append({
+            'code': subject.subject_code,
+            'name': subject.subject_name,
+            'type': normalized_type,
+        })
+
+    return jsonify({
+        'format_id': fmt.id if fmt else None,
+        'batch_id': batch_id,
+        'semester': semester,
+        'updated_at': fmt.updated_at.isoformat() if fmt and fmt.updated_at else None,
+        'format_subjects': format_subjects,
+        'subject_types': sorted(available_types.union(set(DEFAULT_SUBJECT_TYPES))),
+        'available_subjects_by_type': dict(subjects_by_type),
+    })
+
+
+@dept_bp.route('/sections/<int:section_id>/assign-subjects', methods=['GET'])
+@token_required
+@role_required('DEPT_ADMIN')
+def get_section_assignments(current_user, section_id):
+    """Get existing assignments for a section"""
+    section = db.session.get(Section, section_id)
+    if not section or section.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Section not found'}), 404
+
+    assignments = SectionSubjectAssignment.query.filter_by(
+        section_id=section_id,
+        semester=section.current_semester
+    ).all()
+
+    return jsonify([{
+        'format_code': a.format_code,
+        'subject_code': a.subject_code,
+        'subject_type': a.subject_type,
+    } for a in assignments])
+
+
+@dept_bp.route('/sections/<int:section_id>/assign-subjects', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def assign_section_subjects(current_user, section_id):
+    """Assign actual subjects to format slots for a section."""
+    section = db.session.get(Section, section_id)
+    if not section or section.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Section not found'}), 404
+
+    data = request.get_json() or {}
+    mapping_list = data.get('subjects', [])  # list of {format_code, subject_code}
+
+    # Get format to validate
+    fmt = SectionSubjectFormat.query.filter_by(
+        batch_id=section.batch_id,
+        semester=section.current_semester
+    ).first()
+
+    if not fmt:
+        return jsonify({'error': 'Format is not defined for this batch and semester'}), 400
+    format_items = FormatSubject.query.filter_by(format_id=fmt.id).all()
+    if not format_items:
+        return jsonify({'error': 'Format has no slots defined'}), 400
+
+    mapping_by_slot = {}
+    for item in mapping_list:
+        slot_code = (item.get('format_code') or item.get('code') or '').strip().upper()
+        selected_subject_code = (item.get('subject_code') or '').strip().upper()
+        if not slot_code:
+            continue
+        mapping_by_slot[slot_code] = selected_subject_code
+
+    SectionSubjectAssignment.query.filter_by(
+        section_id=section_id,
+        semester=section.current_semester
+    ).delete(synchronize_session=False)
+
+    inserted = 0
+    used_subject_codes = set()
+    for format_item in format_items:
+        slot_code = format_item.subject_code
+        slot_type = normalize_subject_type(format_item.subject_type)
+        if slot_type == 'Common':
+            selected_subject_code = (format_item.mapped_subject_code or '').strip().upper()
+            if not selected_subject_code:
+                return jsonify({'error': f'Common slot {slot_code} has no selected subject in format'}), 400
+        else:
+            selected_subject_code = mapping_by_slot.get(slot_code, '')
+            if not selected_subject_code:
+                return jsonify({'error': f'Please select a subject for slot {slot_code}'}), 400
+
+        if selected_subject_code in used_subject_codes:
+            return jsonify({'error': f'Subject {selected_subject_code} selected more than once'}), 400
+
+        subject = db.session.get(Subject, selected_subject_code)
+        if not subject or subject.dept_id != current_user.dept_id:
+            return jsonify({'error': f'Subject {selected_subject_code} is invalid'}), 400
+        if normalize_subject_type(subject.subject_type) != slot_type:
+            return jsonify({'error': f'Subject {selected_subject_code} does not match slot type {slot_type}'}), 400
+
+        db.session.add(SectionSubjectAssignment(
+            section_id=section_id,
+            semester=section.current_semester,
+            subject_code=selected_subject_code,
+            format_code=slot_code,
+            subject_type=slot_type
+        ))
+        inserted += 1
+        used_subject_codes.add(selected_subject_code)
+
+    # Clear timetable entries as optional subjects changed
+    TimetableEntry.query.filter_by(section_id=section_id).delete()
+    db.session.commit()
+
+    return jsonify({'message': 'Subjects assigned to section', 'subject_count': inserted}), 201
+
+
+@dept_bp.route('/subjects/clear', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def clear_subjects(current_user):
+    """Delete all subjects, formats, and assignments for the department"""
+    assignment_count = SectionSubjectAssignment.query.join(Section).filter(Section.dept_id == current_user.dept_id).delete(synchronize_session=False)
+    format_subject_count = FormatSubject.query.join(SectionSubjectFormat, FormatSubject.format_id == SectionSubjectFormat.id).join(Batch, SectionSubjectFormat.batch_id == Batch.batch_id).filter(Batch.dept_id == current_user.dept_id).delete(synchronize_session=False)
+    format_count = SectionSubjectFormat.query.join(Batch).filter(Batch.dept_id == current_user.dept_id).delete(synchronize_session=False)
+    subject_count = Subject.query.filter_by(dept_id=current_user.dept_id).delete()
+    db.session.commit()
+    return jsonify({'message': f'Cleared {subject_count} subjects, {format_count} formats, {format_subject_count} format subjects, {assignment_count} assignments', 'subject_count': subject_count, 'format_count': format_count, 'format_subject_count': format_subject_count, 'assignment_count': assignment_count})
+
+
+@dept_bp.route('/subjects/reset', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def reset_subjects(current_user):
+    data = request.get_json() or {}
+    subs = data.get('subjects')
+    if not isinstance(subs, list):
+        return jsonify({'error': 'subjects array required'}), 400
+    Subject.query.filter_by(dept_id=current_user.dept_id).delete()
+    for item in subs:
+        if not all(item.get(k) for k in ['code', 'name', 'credits', 'periods', 'subject_type']):
+            continue
+        sem = int(item.get('semester')) if item.get('semester') else None
+        subject = Subject(
+            subject_code=item['code'].strip().upper(),
+            subject_name=item['name'].strip(),
+            semester=sem,
+            credits=float(item['credits']),
+            periods=int(item['periods']),
+            subject_type=item['subject_type'],
+            dept_id=current_user.dept_id,
+            batch_id=int(item['batch_id']) if item.get('batch_id') else None,
+            program_id=int(item['program_id']) if item.get('program_id') else None,
+        )
+        db.session.add(subject)
+    db.session.commit()
+    return jsonify({'message': 'Subject reset completed'})
+
+
+@dept_bp.route('/students/reset', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def reset_students(current_user):
+    data = request.get_json() or {}
+    studs = data.get('students')
+    if not isinstance(studs, list):
+        return jsonify({'error': 'students array required'}), 400
+    # delete student-centric tables, then the students
+    for st in Student.query.filter_by(dept_id=current_user.dept_id).all():
+        AttendanceRecord.query.filter_by(student_id=st.student_id).delete()
+        Mark.query.filter_by(student_id=st.student_id).delete()
+        db.session.delete(st)
+    db.session.commit()
+    created = 0
+    for item in studs:
+        if not all(item.get(k) for k in ['roll_no', 'name', 'batch_id', 'section_id', 'email', 'password']):
+            continue
+        batch_id = int(item['batch_id'])
+        section_id = int(item['section_id'])
+        student = Student(
+            student_name=item['name'].strip(),
+            email=item['email'].strip(),
+            roll_no=item['roll_no'].strip(),
+            batch_id=batch_id,
+            section_id=section_id,
+            dept_id=current_user.dept_id,
+            student_type=item.get('student_type', 'Regular'),
+            passport_number=item.get('passport_number'),
+            category=item.get('category', 'General'),
+            entrance_marks=float(item.get('entrance_marks') or 0),
+        )
+        db.session.add(student)
+        created += 1
+    db.session.commit()
+    return jsonify({'message': 'Student reset completed', 'created': created})
+
 
 # ── Faculty Management ────────────────────────────────
 @dept_bp.route('/faculty', methods=['GET'])
@@ -741,13 +1366,15 @@ def get_faculty(current_user):
         formatted_allocs = []
         for a in allocations:
             section = db.session.get(Section, a.section_id)
+            batch = db.session.get(Batch, a.batch_id)
+            program = db.session.get(Program, batch.program_id) if batch else None
             section_name = section.section_name if section else 'Unknown'
             formatted_allocs.append({
                 'batch_id': a.batch_id,
                 'section_id': a.section_id,
                 'section_name': section_name,
                 'subject_code': a.subject_code,
-                'display': f'{section_name}{a.batch_id}-{a.subject_code}',  # e.g., A1-CS301
+                'display': f'{batch.batch_name if batch else "Unknown"}-{program.program_name if program else "Unknown"}-{section_name}-{a.subject_code}',
             })
         faculty_list.append({
             'id': f.faculty_id,
@@ -853,8 +1480,6 @@ def assign_faculty_allocation(current_user, faculty_id):
     subject = db.session.get(Subject, data['subject_code'])
     if not subject or subject.dept_id != current_user.dept_id:
         return jsonify({'error': 'Invalid subject'}), 400
-    if subject.semester is not None and section.current_semester is not None and subject.semester != section.current_semester:
-        return jsonify({'error': 'Subject semester does not match section semester'}), 400
 
     existing_allocation = FacultyBatchSection.query.filter_by(
         batch_id=data['batch_id'],
@@ -1090,7 +1715,36 @@ def get_section_faculty(current_user, section_id):
 @token_required
 @role_required('DEPT_ADMIN')
 def get_students(current_user):
-    query = Student.query.filter_by(dept_id=current_user.dept_id).order_by(Student.batch_id.asc(), Student.section_id.asc(), Student.roll_no.asc())
+    query = Student.query.filter_by(dept_id=current_user.dept_id)
+
+    batch_id = request.args.get('batch_id')
+    program_id = request.args.get('program_id')
+    semester = request.args.get('semester')
+    attendance_lt = request.args.get('attendance_lt')
+    student_type = request.args.get('type')
+
+    if batch_id:
+        try:
+            query = query.filter_by(batch_id=int(batch_id))
+        except ValueError:
+            pass
+    if program_id:
+        try:
+            b_ids = [b.batch_id for b in Batch.query.filter_by(program_id=int(program_id), dept_id=current_user.dept_id).all()]
+            query = query.filter(Student.batch_id.in_(b_ids))
+        except ValueError:
+            pass
+    if semester:
+        try:
+            sem = int(semester)
+            section_ids = [s.section_id for s in Section.query.filter_by(current_semester=sem, dept_id=current_user.dept_id).all()]
+            query = query.filter(Student.section_id.in_(section_ids))
+        except ValueError:
+            pass
+    if student_type:
+        query = query.filter_by(student_type=student_type)
+
+    query = query.order_by(Student.roll_no.asc())
     student_list = []
     for s in query.all():
         u = db.session.get(User, s.student_id)
@@ -1098,25 +1752,54 @@ def get_students(current_user):
             u = User.query.filter_by(email=s.email).first()
         section = db.session.get(Section, s.section_id)
         batch = db.session.get(Batch, s.batch_id)
+
         total = AttendanceRecord.query.filter_by(student_id=s.student_id).count()
         present = AttendanceRecord.query.filter_by(student_id=s.student_id, status='P').count()
-        percent = round((present / total) * 100, 1) if total > 0 else 0
-        marks = Mark.query.filter_by(student_id=s.student_id).all()
-        total_obtained = sum(mark.obtained_marks for mark in marks)
-        total_max = sum(mark.max_marks for mark in marks)
-        marks_pct = round((total_obtained / total_max) * 100, 1) if total_max > 0 else 0
+        attendance_pct = round((present / total) * 100, 1) if total > 0 else 0
+
+        mid1 = Mark.query.filter_by(student_id=s.student_id, exam_type='mid1').first()
+        mid2 = Mark.query.filter_by(student_id=s.student_id, exam_type='mid2').first()
+        assign1 = Mark.query.filter_by(student_id=s.student_id, exam_type='assignment1').first()
+        assign2 = Mark.query.filter_by(student_id=s.student_id, exam_type='assignment2').first()
+
+        best_mid = max(mid1.obtained_marks if mid1 else 0, mid2.obtained_marks if mid2 else 0)
+        best_mid = min(best_mid, 20)
+        assignment_total = 0
+        if assign1:
+            assignment_total += min(assign1.obtained_marks, assign1.max_marks or 0)
+        if assign2:
+            assignment_total += min(assign2.obtained_marks, assign2.max_marks or 0)
+        assignment_total = min(assignment_total, 10)
+
+        total_marks = round(best_mid + assignment_total, 2)
+
+        if attendance_lt:
+            try:
+                if float(attendance_pct) >= float(attendance_lt):
+                    continue
+            except ValueError:
+                pass
+
         student_list.append({
             'id': s.student_id,
             'roll_no': s.roll_no,
             'name': u.name if u else None,
             'email': s.email,
+            'phone': s.phone,
+            'student_type': s.student_type,
+            'passport_number': s.passport_number,
+            'category': s.category,
+            'entrance_marks': s.entrance_marks,
             'section_id': s.section_id,
             'section_name': section.section_name if section else None,
             'batch_id': s.batch_id,
             'batch_name': batch.batch_name if batch else None,
-            'attendance_pct': percent,
-            'marks': marks_pct,
+            'program_id': batch.program_id if batch else None,
+            'program_name': (db.session.get(Program, batch.program_id).program_name if batch and batch.program_id else None),
+            'attendance_pct': attendance_pct,
+            'total_marks': total_marks,
         })
+
     return jsonify(student_list)
 
 @dept_bp.route('/students', methods=['POST'])
@@ -1124,9 +1807,9 @@ def get_students(current_user):
 @role_required('DEPT_ADMIN')
 def create_student(current_user):
     data = request.get_json()
-    required = ['name', 'email', 'password', 'roll_no', 'batch_id', 'section_id']
+    required = ['name', 'email', 'password', 'roll_no', 'batch_id', 'section_id', 'student_type', 'category']
     if not data or not all(data.get(k) for k in required):
-        return jsonify({'error': 'name, email, password, roll_no, batch_id, section_id are required'}), 400
+        return jsonify({'error': 'name, email, password, roll_no, batch_id, section_id, student_type, category are required'}), 400
     # Ensure batch_id and section_id are integers
     try:
         batch_id = int(data['batch_id'])
@@ -1149,13 +1832,130 @@ def create_student(current_user):
     if Student.query.filter_by(roll_no=roll_no, dept_id=current_user.dept_id).first():
         return jsonify({'error': 'Roll number already exists'}), 409
     phone = (data.get('phone') or '').strip()
+    student_type = data.get('student_type', 'Regular')
+    passport_number = (data.get('passport_number') or '').strip() or None
+    category = (data.get('category') or '').strip()
+    entrance_marks = float(data.get('entrance_marks') or 0)
+
     user = User(name=data['name'].strip(), email=email, password_hash=hash_password(data['password']), phone=phone, role='STUDENT', dept_id=current_user.dept_id, college_id=current_user.college_id)
     db.session.add(user)
     db.session.flush()
-    student = Student(student_id=user.user_id, roll_no=roll_no, batch_id=batch_id, section_id=section_id, dept_id=current_user.dept_id, email=email, phone=phone)
+    student = Student(
+        student_id=user.user_id,
+        roll_no=roll_no,
+        batch_id=batch_id,
+        section_id=section_id,
+        dept_id=current_user.dept_id,
+        email=email,
+        phone=phone,
+        student_type=student_type,
+        passport_number=passport_number,
+        category=category,
+        entrance_marks=entrance_marks,
+    )
     db.session.add(student)
     db.session.commit()
     return jsonify({'id': student.student_id, 'name': user.name, 'roll_no': student.roll_no}), 201
+
+@dept_bp.route('/students/bulk', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def bulk_upload_students(current_user):
+    csv_file = request.files.get('file')
+    if not csv_file:
+        return jsonify({'error': 'file is required'}), 400
+
+    filename = csv_file.filename.lower()
+    supported = ['.csv', '.xlsx', '.xls']
+    if not any(filename.endswith(ext) for ext in supported):
+        return jsonify({'error': 'Only CSV/XLSX files are supported'}), 400
+
+    rows = []
+    if filename.endswith('.csv'):
+        import csv
+        try:
+            decoded = csv_file.stream.read().decode('utf-8', errors='replace')
+            reader = csv.DictReader(decoded.splitlines())
+            for row in reader:
+                rows.append(row)
+        except Exception as exc:
+            return jsonify({'error': f'CSV parse error: {exc}'}), 400
+    else:
+        try:
+            from openpyxl import load_workbook
+        except ImportError:
+            return jsonify({'error': 'openpyxl is required for Excel upload'}), 500
+        try:
+            wb = load_workbook(csv_file, data_only=True)
+            sheet = wb.active
+            headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                rows.append({headers[i]: row[i] for i in range(len(headers)) if headers[i]})
+        except Exception as exc:
+            return jsonify({'error': f'Excel parse error: {exc}'}), 400
+
+    created = 0
+    errors = []
+    for idx, row in enumerate(rows, start=1):
+        try:
+            data = {
+                'name': str(row.get('name', '')).strip(),
+                'email': str(row.get('email', '')).strip(),
+                'password': str(row.get('password', 'defaultPassword')).strip(),
+                'roll_no': str(row.get('roll_no', '')).strip(),
+                'batch_id': row.get('batch_id'),
+                'section_id': row.get('section_id'),
+                'student_type': str(row.get('student_type', 'Regular')).strip(),
+                'passport_number': str(row.get('passport_number', '')).strip(),
+                'category': str(row.get('category', '')).strip(),
+                'entrance_marks': row.get('entrance_marks') or 0,
+                'phone': str(row.get('phone', '')).strip(),
+            }
+
+            if not data['name'] or not data['email'] or not data['roll_no'] or not data['batch_id'] or not data['section_id']:
+                errors.append({'row': idx, 'error': 'Missing required fields'})
+                continue
+
+            data['batch_id'] = int(data['batch_id'])
+            data['section_id'] = int(data['section_id'])
+
+            # Reuse create_student logic by direct insertion to avoid nested request call
+            batch = db.session.get(Batch, data['batch_id'])
+            section = db.session.get(Section, data['section_id'])
+            if not batch or batch.dept_id != current_user.dept_id or not section or section.dept_id != current_user.dept_id or section.batch_id != batch.batch_id:
+                errors.append({'row': idx, 'error': 'Invalid batch or section'});
+                continue
+
+            email = normalize_email(data['email'])
+            if User.query.filter_by(email=email).first() or Student.query.filter_by(roll_no=data['roll_no'].upper(), dept_id=current_user.dept_id).first():
+                errors.append({'row': idx, 'error': 'Duplicate user or roll number'});
+                continue
+
+            user = User(name=data['name'], email=email, password_hash=hash_password(data['password']), phone=data['phone'], role='STUDENT', dept_id=current_user.dept_id, college_id=current_user.college_id)
+            db.session.add(user)
+            db.session.flush()
+            student = Student(
+                student_id=user.user_id,
+                roll_no=data['roll_no'].upper(),
+                batch_id=data['batch_id'],
+                section_id=data['section_id'],
+                dept_id=current_user.dept_id,
+                email=email,
+                phone=data['phone'],
+                student_type=data['student_type'],
+                passport_number=data['passport_number'] or None,
+                category=data['category'] or None,
+                entrance_marks=float(data['entrance_marks'] or 0),
+            )
+            db.session.add(student)
+            created += 1
+        except Exception as exc:
+            db.session.rollback()
+            errors.append({'row': idx, 'error': str(exc)})
+            continue
+
+    db.session.commit()
+    return jsonify({'created': created, 'errors': errors})
 
 @dept_bp.route('/students/<int:student_id>', methods=['DELETE'])
 @token_required
