@@ -1,0 +1,41 @@
+# ===== Python / Flask =====
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+dist/
+build/
+*.egg
+.eggs/
+*.whl
+env/
+venv/
+.venv/
+.env
+
+# Database
+*.db
+*.sqlite3
+
+# ===== Node / React =====
+node_modules/
+client/node_modules/
+client/dist/
+client/.vite/
+
+# Logs
+*.log
+npm-debug.log*
+
+# ===== IDE / Editor =====
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+
+# ===== OS =====
+desktop.ini
+*.lnk
