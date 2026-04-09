@@ -10,6 +10,7 @@ from auth import hash_password, normalize_email, token_required, role_required
 dept_bp = Blueprint('department', __name__, url_prefix='/api/department')
 
 TIMETABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+<<<<<<< HEAD
 
 TIMETABLE_SLOTS = [
     '09:00-10:40',   # slot 0  (100 min)
@@ -18,6 +19,16 @@ TIMETABLE_SLOTS = [
     '03:10-04:00',   # slot 3  (50 min)
 ]
 
+=======
+TIMETABLE_SLOTS = [
+    '09:00-09:50',
+    '09:50-10:40',
+    '10:40-11:30',
+    '11:30-12:20',
+    '01:30-02:20',
+    '02:20-03:10',
+]
+>>>>>>> upstream/master
 NON_TEACHING_LABELS = [
     'Library',
     'Tutorial',
@@ -51,6 +62,10 @@ def get_dept_subject_prefix(dept_name):
     if not tokens:
         return 'DP'
     base = tokens[0]
+<<<<<<< HEAD
+=======
+    # CSE -> CS, ECE -> EC, EEE -> EE
+>>>>>>> upstream/master
     if len(base) >= 3 and base.endswith('E'):
         base = base[:-1]
     if len(base) < 2:
@@ -112,6 +127,10 @@ def clear_batch_subject_setup(batch_id, section_ids=None):
     TimetableEntry.query.filter_by(batch_id=batch_id).delete(synchronize_session=False)
 
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
 def escape_pdf_text(value):
     return (
         str(value)
@@ -205,6 +224,10 @@ def build_timetable_pdf(section, entries):
     commands = ['1.10 w', '0 g', '0 G']
 
     commands.append(build_pdf_rect(margin - 6, margin - 6, content_width + 12, page_height - (margin * 2) + 12))
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     commands.append(build_pdf_rect(margin, top_y - 24, content_width, 18, fill_gray=0.80))
     commands.append(build_pdf_centered_text(margin, top_y - 18, content_width, f'DEPARTMENT OF {department.dept_name.upper() if department else "ACADEMICS"}', font='F2', size=11))
     commands.append(build_pdf_centered_text(margin, top_y - 38, content_width, (college.college_name if college else 'Attendance Management System').upper(), font='F2', size=11))
@@ -227,35 +250,58 @@ def build_timetable_pdf(section, entries):
 
     table_top = meta_top - 46
     day_width = 58
+<<<<<<< HEAD
     # Now 4 slots: 2 before lunch, lunch break, 2 after lunch
     slot_width = 110
+=======
+    slot_width = 92
+>>>>>>> upstream/master
     lunch_width = 34
     header_height = 34
     row_height = 30
     day_x = margin
     time_x = day_x + day_width
+<<<<<<< HEAD
     lunch_x = time_x + (slot_width * 2)
+=======
+    lunch_x = time_x + (slot_width * 4)
+>>>>>>> upstream/master
 
     commands.append(build_pdf_rect(day_x, table_top - header_height, day_width, header_height, fill_gray=0.84))
     commands.append(build_pdf_centered_text(day_x, table_top - 20, day_width, 'DAY', font='F2', size=9))
 
+<<<<<<< HEAD
     # Before lunch: slots 0 and 1
     for slot_index in range(2):
+=======
+    for slot_index in range(4):
+>>>>>>> upstream/master
         x = time_x + (slot_index * slot_width)
         commands.append(build_pdf_rect(x, table_top - header_height, slot_width, header_height, fill_gray=0.84))
         commands.append(build_pdf_centered_text(x, table_top - 18, slot_width, TIMETABLE_SLOTS[slot_index], font='F2', size=8))
 
+<<<<<<< HEAD
     # Lunch break column
     commands.append(build_pdf_rect(lunch_x, table_top - header_height - (len(TIMETABLE_DAYS) * row_height), lunch_width, header_height + (len(TIMETABLE_DAYS) * row_height), fill_gray=0.88))
     lunch_letters = list('LUNCH')
+=======
+    commands.append(build_pdf_rect(lunch_x, table_top - header_height - (len(TIMETABLE_DAYS) * row_height), lunch_width, header_height + (len(TIMETABLE_DAYS) * row_height), fill_gray=0.88))
+    lunch_letters = list('LUNCH BREAK')
+>>>>>>> upstream/master
     for index, letter in enumerate(lunch_letters):
         y = table_top - 18 - (index * 14)
         commands.append(build_pdf_centered_text(lunch_x, y, lunch_width, letter, font='F2', size=8))
 
+<<<<<<< HEAD
     # After lunch: slots 2 and 3
     after_lunch_x = lunch_x + lunch_width
     for slot_index in range(2, 4):
         x = after_lunch_x + ((slot_index - 2) * slot_width)
+=======
+    after_lunch_x = lunch_x + lunch_width
+    for slot_index in range(4, 6):
+        x = after_lunch_x + ((slot_index - 4) * slot_width)
+>>>>>>> upstream/master
         commands.append(build_pdf_rect(x, table_top - header_height, slot_width, header_height, fill_gray=0.84))
         commands.append(build_pdf_centered_text(x, table_top - 18, slot_width, TIMETABLE_SLOTS[slot_index], font='F2', size=8))
 
@@ -265,7 +311,11 @@ def build_timetable_pdf(section, entries):
         commands.append(build_pdf_rect(day_x, row_bottom, day_width, row_height))
         commands.append(build_pdf_centered_text(day_x, row_bottom + 11, day_width, day_name[:3].upper(), font='F2', size=9))
 
+<<<<<<< HEAD
         for slot_index in range(2):
+=======
+        for slot_index in range(4):
+>>>>>>> upstream/master
             x = time_x + (slot_index * slot_width)
             commands.append(build_pdf_rect(x, row_bottom, slot_width, row_height))
             entry = entry_map.get((day_order, slot_index))
@@ -275,8 +325,13 @@ def build_timetable_pdf(section, entries):
             else:
                 commands.append(build_pdf_centered_text(x, row_bottom + 11, slot_width, truncate_text(get_non_teaching_label(day_order, slot_index), 16), size=7))
 
+<<<<<<< HEAD
         for slot_index in range(2, 4):
             x = after_lunch_x + ((slot_index - 2) * slot_width)
+=======
+        for slot_index in range(4, 6):
+            x = after_lunch_x + ((slot_index - 4) * slot_width)
+>>>>>>> upstream/master
             commands.append(build_pdf_rect(x, row_bottom, slot_width, row_height))
             entry = entry_map.get((day_order, slot_index))
             if entry:
@@ -323,12 +378,23 @@ def get_section_subject_assignments(section):
 
 
 def get_section_semester_subjects(dept_id, section):
+<<<<<<< HEAD
+=======
+    """Get all actual subjects assigned to this section for the active semester."""
+>>>>>>> upstream/master
     assigned = SectionSubjectAssignment.query.filter_by(
         section_id=section.section_id,
         semester=section.current_semester
     ).all()
+<<<<<<< HEAD
     if not assigned:
         return []
+=======
+
+    if not assigned:
+        return []
+
+>>>>>>> upstream/master
     assigned_codes = [a.subject_code for a in assigned]
     assigned_subjects = Subject.query.filter(
         Subject.subject_code.in_(assigned_codes),
@@ -372,6 +438,10 @@ def validate_section_timetable_readiness(section, dept_id):
             'missing_subjects': [],
             'weekly_class_target': 0,
         }
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     allocation_map = get_section_subject_allocations(section)
     missing_subjects = [subject.subject_code for subject in semester_subjects if subject.subject_code not in allocation_map]
     return {
@@ -402,7 +472,15 @@ def build_timetable_grid(entries):
     entry_map = {(entry.day_order, entry.slot_index): entry for entry in entries}
     grid = []
     for day_order, day_name in enumerate(TIMETABLE_DAYS):
+<<<<<<< HEAD
         row = {'day_order': day_order, 'day_name': day_name, 'slots': []}
+=======
+        row = {
+            'day_order': day_order,
+            'day_name': day_name,
+            'slots': [],
+        }
+>>>>>>> upstream/master
         for slot_index, slot_label in enumerate(TIMETABLE_SLOTS):
             entry = entry_map.get((day_order, slot_index))
             row['slots'].append({
@@ -432,6 +510,7 @@ def enrich_timetable_entries(entries):
     return enriched
 
 
+<<<<<<< HEAD
 def _is_lab_subject(subject_type, subject_name=''):
     """Return True if the subject is a lab (lab-type check)."""
     return 'lab' in (subject_type or '').lower() or 'lab' in (subject_name or '').lower()
@@ -520,10 +599,67 @@ def generate_section_timetable(section, subjects, allocation_map):
         random.shuffle(slots)
 
         return slots
+=======
+def generate_section_timetable(section, subjects, allocation_map):
+    session_templates = []
+    weekly_target = get_weekly_class_target(len(subjects))
+    for subject in subjects:
+        allocation = allocation_map[subject.subject_code]
+        session_templates.extend([
+            {
+                'subject_code': subject.subject_code,
+                'faculty_id': allocation.faculty_id,
+            }
+            for _ in range(weekly_target)
+        ])
+
+    faculty_load = Counter(item['faculty_id'] for item in session_templates)
+    session_templates.sort(key=lambda item: (-faculty_load[item['faculty_id']], item['subject_code']))
+
+    busy_slots = get_busy_faculty_slots(exclude_section_id=section.section_id)
+    assigned_slots = {}
+    faculty_day_usage = Counter()
+    subject_day_usage = Counter()
+    day_load = Counter()
+    max_day_load = max(1, (len(session_templates) + len(TIMETABLE_DAYS) - 1) // len(TIMETABLE_DAYS))
+
+    def candidate_slots(session):
+        preferred = []
+        fallback = []
+        for day_order in range(len(TIMETABLE_DAYS)):
+            for slot_index in range(len(TIMETABLE_SLOTS)):
+                slot_key = (day_order, slot_index)
+                if slot_key in assigned_slots:
+                    continue
+                if session['faculty_id'] in busy_slots.get(slot_key, set()):
+                    continue
+                # no two consecutive theory sessions for same faculty
+                prev_slot = (day_order, slot_index - 1)
+                if slot_index > 0 and prev_slot in assigned_slots:
+                    prev_session = assigned_slots[prev_slot]
+                    if prev_session['faculty_id'] == session['faculty_id']:
+                        continue
+
+                ranking = (
+                    day_load[day_order] >= max_day_load,
+                    subject_day_usage[(session['subject_code'], day_order)] > 0,
+                    faculty_day_usage[(session['faculty_id'], day_order)],
+                    day_load[day_order],
+                    slot_index,
+                )
+                if subject_day_usage[(session['subject_code'], day_order)] == 0:
+                    preferred.append((ranking, slot_key))
+                else:
+                    fallback.append((ranking, slot_key))
+        ordered = preferred or fallback
+        ordered.sort(key=lambda item: item[0])
+        return [slot_key for _, slot_key in ordered]
+>>>>>>> upstream/master
 
     def backtrack(index):
         if index == len(session_templates):
             return True
+<<<<<<< HEAD
 
         session = session_templates[index]
 
@@ -543,6 +679,27 @@ def generate_section_timetable(section, subjects, allocation_map):
     generated_entries = []
 
     for (day_order, slot_index), session in assigned_slots.items():
+=======
+        session = session_templates[index]
+        for day_order, slot_index in candidate_slots(session):
+            assigned_slots[(day_order, slot_index)] = session
+            faculty_day_usage[(session['faculty_id'], day_order)] += 1
+            subject_day_usage[(session['subject_code'], day_order)] += 1
+            day_load[day_order] += 1
+            if backtrack(index + 1):
+                return True
+            del assigned_slots[(day_order, slot_index)]
+            faculty_day_usage[(session['faculty_id'], day_order)] -= 1
+            subject_day_usage[(session['subject_code'], day_order)] -= 1
+            day_load[day_order] -= 1
+        return False
+
+    if not backtrack(0):
+        raise ValueError('Unable to generate a conflict-free timetable with the current faculty allocations')
+
+    generated_entries = []
+    for (day_order, slot_index), session in sorted(assigned_slots.items()):
+>>>>>>> upstream/master
         generated_entries.append(
             TimetableEntry(
                 section_id=section.section_id,
@@ -555,6 +712,7 @@ def generate_section_timetable(section, subjects, allocation_map):
                 slot_label=TIMETABLE_SLOTS[slot_index],
             )
         )
+<<<<<<< HEAD
 
     return generated_entries, None
 
@@ -649,17 +807,31 @@ def save_section_timetable(section, subjects, allocation_map, raw_entries):
     subject_codes = {subject.subject_code for subject in subjects}
     subject_type_map = {subject.subject_code: subject.subject_type for subject in subjects}
     subject_name_map = {subject.subject_code: subject.subject_name for subject in subjects}
+=======
+    return generated_entries, weekly_target
+
+
+def save_section_timetable(section, subjects, allocation_map, raw_entries):
+    weekly_target = get_weekly_class_target(len(subjects))
+    subject_codes = {subject.subject_code for subject in subjects}
+>>>>>>> upstream/master
     busy_slots = get_busy_faculty_slots(exclude_section_id=section.section_id)
     seen_slots = set()
     subject_counts = Counter()
     prepared_entries = []
+<<<<<<< HEAD
     slot_faculty_map = {}  # (day, slot) -> {faculty_id, is_lab} for consecutive check
+=======
+>>>>>>> upstream/master
 
     for item in raw_entries:
         subject_code = (item.get('subject_code') or '').strip().upper()
         if not subject_code:
             continue
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
         day_order = item.get('day_order')
         slot_index = item.get('slot_index')
         if day_order is None or slot_index is None:
@@ -669,15 +841,21 @@ def save_section_timetable(section, subjects, allocation_map, raw_entries):
             slot_index = int(slot_index)
         except (TypeError, ValueError):
             raise ValueError('Invalid timetable slot coordinates')
+<<<<<<< HEAD
 
         if day_order < 0 or day_order >= len(TIMETABLE_DAYS) or \
            slot_index < 0 or slot_index >= len(TIMETABLE_SLOTS):
             raise ValueError('Timetable slot is out of range')
 
+=======
+        if day_order < 0 or day_order >= len(TIMETABLE_DAYS) or slot_index < 0 or slot_index >= len(TIMETABLE_SLOTS):
+            raise ValueError('Timetable slot is out of range')
+>>>>>>> upstream/master
         if subject_code not in subject_codes:
             raise ValueError(f'{subject_code} is not a valid subject for this section')
         if subject_code not in allocation_map:
             raise ValueError(f'{subject_code} is not allocated to any faculty for this section')
+<<<<<<< HEAD
 
         slot_key = (day_order, slot_index)
         faculty_id = allocation_map[subject_code].faculty_id
@@ -709,6 +887,16 @@ def save_section_timetable(section, subjects, allocation_map, raw_entries):
         slot_faculty_map[slot_key] = {'faculty_id': faculty_id, 'is_lab': is_lab}
         subject_counts[subject_code] += 1
 
+=======
+        slot_key = (day_order, slot_index)
+        if slot_key in seen_slots:
+            raise ValueError('A timetable slot cannot contain more than one subject')
+        faculty_id = allocation_map[subject_code].faculty_id
+        if faculty_id in busy_slots.get(slot_key, set()):
+            raise ValueError(f'Faculty conflict detected for {subject_code} on {TIMETABLE_DAYS[day_order]} {TIMETABLE_SLOTS[slot_index]}')
+        seen_slots.add(slot_key)
+        subject_counts[subject_code] += 1
+>>>>>>> upstream/master
         prepared_entries.append(
             TimetableEntry(
                 section_id=section.section_id,
@@ -722,6 +910,7 @@ def save_section_timetable(section, subjects, allocation_map, raw_entries):
             )
         )
 
+<<<<<<< HEAD
     # expected_counts = {subject.subject_code: weekly_target for subject in subjects}
     expected_counts = {}
 
@@ -732,6 +921,11 @@ def save_section_timetable(section, subjects, allocation_map, raw_entries):
         raise ValueError(
             f'Each subject must appear exactly {weekly_target} times in the timetable'
         )
+=======
+    expected_counts = {subject.subject_code: weekly_target for subject in subjects}
+    if dict(subject_counts) != expected_counts:
+        raise ValueError(f'Each subject must appear exactly {weekly_target} times in the timetable')
+>>>>>>> upstream/master
 
     TimetableEntry.query.filter_by(section_id=section.section_id).delete()
     db.session.add_all(prepared_entries)
@@ -748,7 +942,10 @@ def sync_batch_active_semester(batch_id, semester_no):
         active_semester.is_active = True
     return active_semester
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/batches', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -772,7 +969,10 @@ def get_batches(current_user):
         })
     return jsonify(result)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/batches', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -789,6 +989,10 @@ def create_batch(current_user):
     if not program:
         return jsonify({'error': 'Invalid program_id'}), 400
 
+<<<<<<< HEAD
+=======
+    # Academic range validation: e.g., 2023-25 => 2-year, 2021-25 => 4-year
+>>>>>>> upstream/master
     year_match = re.match(r'^(?P<start>\d{4})-(?P<end>\d{2,4})$', str(data['name']).strip())
     if year_match:
         start_year = int(year_match.group('start'))
@@ -823,20 +1027,30 @@ def delete_group_sections(current_user):
         return jsonify({'message': 'No sections found for this batch/program', 'deleted': 0})
     deleted = len(sections)
     for s in sections:
+<<<<<<< HEAD
+=======
+        # also clear related students and timetable entries in this section
+>>>>>>> upstream/master
         Student.query.filter_by(section_id=s.section_id).delete()
         TimetableEntry.query.filter_by(section_id=s.section_id).delete()
         db.session.delete(s)
     db.session.commit()
     return jsonify({'message': f'Deleted {deleted} section(s) for batch/program', 'deleted': deleted})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/programs', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
 def get_programs(current_user):
     return jsonify([{'id': p.program_id, 'name': p.program_name, 'duration_semesters': p.duration_semesters} for p in Program.query.all()])
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/programs', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -849,7 +1063,10 @@ def create_program(current_user):
     db.session.commit()
     return jsonify({'id': program.program_id, 'name': program.program_name, 'duration_semesters': program.duration_semesters}), 201
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/stats', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -867,7 +1084,11 @@ def get_stats(current_user):
         'allocations': allocation_count,
     })
 
+<<<<<<< HEAD
 
+=======
+# ── Sections CRUD ─────────────────────────────────────
+>>>>>>> upstream/master
 @dept_bp.route('/sections', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -879,6 +1100,10 @@ def get_sections(current_user):
         .order_by(Batch.batch_name.asc(), Section.current_semester.asc(), Section.section_name.asc())
         .all()
     )
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     result = []
     now = datetime.now(timezone.utc)
     for s in sections:
@@ -903,7 +1128,10 @@ def get_sections(current_user):
         })
     return jsonify(result)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/sections', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -911,6 +1139,10 @@ def create_section(current_user):
     data = request.get_json()
     if not data or not data.get('name') or not data.get('batch_id'):
         return jsonify({'error': 'Name and batch_id are required'}), 400
+<<<<<<< HEAD
+=======
+    # Check if section name already exists in this batch
+>>>>>>> upstream/master
     existing = Section.query.filter_by(section_name=data['name'], batch_id=data['batch_id']).first()
     if existing:
         return jsonify({'error': 'Section already exists in this batch'}), 409
@@ -936,7 +1168,10 @@ def create_section(current_user):
     result['program_name'] = program.program_name if program else None
     return jsonify(result), 201
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/sections/<int:section_id>', methods=['PUT'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -978,12 +1213,19 @@ def update_section(current_user, section_id):
     db.session.commit()
     batch = db.session.get(Batch, section.batch_id)
     program = db.session.get(Program, section.program_id or (batch.program_id if batch else None))
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     result = section.to_dict()
     result['batch_name'] = batch.batch_name if batch else None
     result['program_name'] = program.program_name if program else None
     return jsonify(result)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/sections/<int:section_id>', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -995,11 +1237,18 @@ def delete_section(current_user, section_id):
     db.session.commit()
     return jsonify({'message': 'Section deleted'})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/sections/flat', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
 def get_sections_flat(current_user):
+<<<<<<< HEAD
+=======
+    # Return flat list of sections for components that need individual sections
+>>>>>>> upstream/master
     sections = Section.query.filter_by(dept_id=current_user.dept_id).all()
     result = []
     for section in sections:
@@ -1014,11 +1263,18 @@ def get_sections_flat(current_user):
         })
     return jsonify(result)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/batches/<int:batch_id>/sections', methods=['PUT'])
 @token_required
 @role_required('DEPT_ADMIN')
 def update_batch_sections(current_user, batch_id):
+<<<<<<< HEAD
+=======
+    """Update semester for all sections in a batch"""
+>>>>>>> upstream/master
     batch = db.session.get(Batch, batch_id)
     if not batch or batch.dept_id != current_user.dept_id:
         return jsonify({'error': 'Batch not found'}), 404
@@ -1031,6 +1287,10 @@ def update_batch_sections(current_user, batch_id):
     if semester_changed:
         section_ids = [section.section_id for section in sections]
         clear_batch_subject_setup(batch_id, section_ids=section_ids)
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     for s in sections:
         s.current_semester = new_semester
         TimetableEntry.query.filter_by(section_id=s.section_id).delete()
@@ -1038,11 +1298,18 @@ def update_batch_sections(current_user, batch_id):
     db.session.commit()
     return jsonify({'message': f'Updated {len(sections)} sections', 'count': len(sections)})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/batches/<int:batch_id>/sections', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
 def delete_batch_sections(current_user, batch_id):
+<<<<<<< HEAD
+=======
+    """Delete all sections in a batch"""
+>>>>>>> upstream/master
     batch = db.session.get(Batch, batch_id)
     if not batch or batch.dept_id != current_user.dept_id:
         return jsonify({'error': 'Batch not found'}), 404
@@ -1053,7 +1320,10 @@ def delete_batch_sections(current_user, batch_id):
     db.session.commit()
     return jsonify({'message': f'Deleted {count} sections', 'count': count})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/subjects', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1087,6 +1357,10 @@ def get_subjects(current_user):
             query = query.filter(Subject.subject_code.in_(assigned_codes))
         except ValueError:
             pass
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     subjects = query.order_by(Subject.subject_type.asc(), Subject.subject_code.asc()).all()
     return jsonify([{
         'code': s.subject_code,
@@ -1163,7 +1437,10 @@ def create_subject(current_user):
     db.session.commit()
     return jsonify({'subject_code': subject.subject_code, 'subject_name': subject.subject_name, 'semester': subject.semester, 'credits': subject.credits, 'subject_type': subject.subject_type}), 201
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/subjects/<subject_code>', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1180,6 +1457,10 @@ def delete_subject(current_user, subject_code):
 @token_required
 @role_required('DEPT_ADMIN')
 def get_batch_programs(current_user):
+<<<<<<< HEAD
+=======
+    """Get all batch-program combinations with section and semester info"""
+>>>>>>> upstream/master
     batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
     result = []
     for batch in batches:
@@ -1202,10 +1483,18 @@ def get_batch_programs(current_user):
 @token_required
 @role_required('DEPT_ADMIN')
 def define_subject_format(current_user):
+<<<<<<< HEAD
     data = request.get_json() or {}
     batch_id = data.get('batch_id')
     semester = data.get('semester')
     subjects_list = data.get('subjects', [])
+=======
+    """Define slot-based subject format for a batch/semester."""
+    data = request.get_json() or {}
+    batch_id = data.get('batch_id')
+    semester = data.get('semester')
+    subjects_list = data.get('subjects', [])  # list of {code, type, subject_code?}
+>>>>>>> upstream/master
 
     if not batch_id or not semester:
         return jsonify({'error': 'batch_id and semester are required'}), 400
@@ -1219,12 +1508,20 @@ def define_subject_format(current_user):
     except (ValueError, TypeError):
         return jsonify({'error': 'semester must be an integer'}), 400
 
+<<<<<<< HEAD
+=======
+    # Get or create format
+>>>>>>> upstream/master
     fmt = SectionSubjectFormat.query.filter_by(batch_id=batch_id, semester=semester).first()
     if not fmt:
         fmt = SectionSubjectFormat(batch_id=batch_id, semester=semester)
         db.session.add(fmt)
         db.session.flush()
 
+<<<<<<< HEAD
+=======
+    # Clear and rebuild subject list
+>>>>>>> upstream/master
     FormatSubject.query.filter_by(format_id=fmt.id).delete()
 
     seen_codes = set()
@@ -1257,6 +1554,10 @@ def define_subject_format(current_user):
         ))
         seen_codes.add(format_code)
 
+<<<<<<< HEAD
+=======
+    # Format updates invalidate section-level optional picks for this batch/semester.
+>>>>>>> upstream/master
     section_ids = [row[0] for row in db.session.query(Section.section_id).filter_by(batch_id=batch_id).all()]
     if section_ids:
         SectionSubjectAssignment.query.filter(
@@ -1276,10 +1577,18 @@ def define_subject_format(current_user):
 @token_required
 @role_required('DEPT_ADMIN')
 def get_format_details(current_user, batch_id, semester):
+<<<<<<< HEAD
+=======
+    """Get slot format details and available subjects grouped by subject type."""
+>>>>>>> upstream/master
     batch = db.session.get(Batch, batch_id)
     if not batch or batch.dept_id != current_user.dept_id:
         return jsonify({'error': 'Invalid batch'}), 400
 
+<<<<<<< HEAD
+=======
+    # Get the format if it exists
+>>>>>>> upstream/master
     fmt = SectionSubjectFormat.query.filter_by(batch_id=batch_id, semester=semester).first()
     format_subjects = []
     available_types = set()
@@ -1296,7 +1605,14 @@ def get_format_details(current_user, batch_id, semester):
             })
         format_subjects = sorted(format_subjects, key=lambda item: subject_code_sort_key(item.get('code')))
 
+<<<<<<< HEAD
     semester_subjects = Subject.query.filter_by(dept_id=current_user.dept_id).order_by(Subject.subject_type.asc(), Subject.subject_code.asc()).all()
+=======
+    semester_subjects = Subject.query.filter_by(
+        dept_id=current_user.dept_id
+    ).order_by(Subject.subject_type.asc(), Subject.subject_code.asc()).all()
+
+>>>>>>> upstream/master
     subjects_by_type = defaultdict(list)
     for subject in semester_subjects:
         normalized_type = normalize_subject_type(subject.subject_type)
@@ -1322,25 +1638,58 @@ def get_format_details(current_user, batch_id, semester):
 @token_required
 @role_required('DEPT_ADMIN')
 def get_section_assignments(current_user, section_id):
+<<<<<<< HEAD
     section = db.session.get(Section, section_id)
     if not section or section.dept_id != current_user.dept_id:
         return jsonify({'error': 'Section not found'}), 404
     assignments = SectionSubjectAssignment.query.filter_by(section_id=section_id, semester=section.current_semester).all()
     return jsonify([{'format_code': a.format_code, 'subject_code': a.subject_code, 'subject_type': a.subject_type} for a in assignments])
+=======
+    """Get existing assignments for a section"""
+    section = db.session.get(Section, section_id)
+    if not section or section.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Section not found'}), 404
+
+    assignments = SectionSubjectAssignment.query.filter_by(
+        section_id=section_id,
+        semester=section.current_semester
+    ).all()
+
+    return jsonify([{
+        'format_code': a.format_code,
+        'subject_code': a.subject_code,
+        'subject_type': a.subject_type,
+    } for a in assignments])
+>>>>>>> upstream/master
 
 
 @dept_bp.route('/sections/<int:section_id>/assign-subjects', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
 def assign_section_subjects(current_user, section_id):
+<<<<<<< HEAD
+=======
+    """Assign actual subjects to format slots for a section."""
+>>>>>>> upstream/master
     section = db.session.get(Section, section_id)
     if not section or section.dept_id != current_user.dept_id:
         return jsonify({'error': 'Section not found'}), 404
 
     data = request.get_json() or {}
+<<<<<<< HEAD
     mapping_list = data.get('subjects', [])
 
     fmt = SectionSubjectFormat.query.filter_by(batch_id=section.batch_id, semester=section.current_semester).first()
+=======
+    mapping_list = data.get('subjects', [])  # list of {format_code, subject_code}
+
+    # Get format to validate
+    fmt = SectionSubjectFormat.query.filter_by(
+        batch_id=section.batch_id,
+        semester=section.current_semester
+    ).first()
+
+>>>>>>> upstream/master
     if not fmt:
         return jsonify({'error': 'Format is not defined for this batch and semester'}), 400
     format_items = FormatSubject.query.filter_by(format_id=fmt.id).all()
@@ -1355,7 +1704,14 @@ def assign_section_subjects(current_user, section_id):
             continue
         mapping_by_slot[slot_code] = selected_subject_code
 
+<<<<<<< HEAD
     SectionSubjectAssignment.query.filter_by(section_id=section_id, semester=section.current_semester).delete(synchronize_session=False)
+=======
+    SectionSubjectAssignment.query.filter_by(
+        section_id=section_id,
+        semester=section.current_semester
+    ).delete(synchronize_session=False)
+>>>>>>> upstream/master
 
     inserted = 0
     used_subject_codes = set()
@@ -1390,8 +1746,15 @@ def assign_section_subjects(current_user, section_id):
         inserted += 1
         used_subject_codes.add(selected_subject_code)
 
+<<<<<<< HEAD
     TimetableEntry.query.filter_by(section_id=section_id).delete()
     db.session.commit()
+=======
+    # Clear timetable entries as optional subjects changed
+    TimetableEntry.query.filter_by(section_id=section_id).delete()
+    db.session.commit()
+
+>>>>>>> upstream/master
     return jsonify({'message': 'Subjects assigned to section', 'subject_count': inserted}), 201
 
 
@@ -1399,6 +1762,10 @@ def assign_section_subjects(current_user, section_id):
 @token_required
 @role_required('DEPT_ADMIN')
 def clear_subjects(current_user):
+<<<<<<< HEAD
+=======
+    """Delete all subjects, formats, and assignments for the department"""
+>>>>>>> upstream/master
     assignment_count = SectionSubjectAssignment.query.join(Section).filter(Section.dept_id == current_user.dept_id).delete(synchronize_session=False)
     format_subject_count = FormatSubject.query.join(SectionSubjectFormat, FormatSubject.format_id == SectionSubjectFormat.id).join(Batch, SectionSubjectFormat.batch_id == Batch.batch_id).filter(Batch.dept_id == current_user.dept_id).delete(synchronize_session=False)
     format_count = SectionSubjectFormat.query.join(Batch).filter(Batch.dept_id == current_user.dept_id).delete(synchronize_session=False)
@@ -1444,6 +1811,10 @@ def reset_students(current_user):
     studs = data.get('students')
     if not isinstance(studs, list):
         return jsonify({'error': 'students array required'}), 400
+<<<<<<< HEAD
+=======
+    # delete student-centric tables, then the students
+>>>>>>> upstream/master
     for st in Student.query.filter_by(dept_id=current_user.dept_id).all():
         AttendanceRecord.query.filter_by(student_id=st.student_id).delete()
         Mark.query.filter_by(student_id=st.student_id).delete()
@@ -1473,6 +1844,10 @@ def reset_students(current_user):
     return jsonify({'message': 'Student reset completed', 'created': created})
 
 
+<<<<<<< HEAD
+=======
+# ── Faculty Management ────────────────────────────────
+>>>>>>> upstream/master
 @dept_bp.route('/faculty', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1481,6 +1856,10 @@ def get_faculty(current_user):
     for f in Faculty.query.filter_by(dept_id=current_user.dept_id).all():
         user = db.session.get(User, f.user_id)
         allocations = FacultyBatchSection.query.filter_by(faculty_id=f.faculty_id).all()
+<<<<<<< HEAD
+=======
+        # Format allocations as Section-Subject (e.g., A1-CS301)
+>>>>>>> upstream/master
         formatted_allocs = []
         for a in allocations:
             section = db.session.get(Section, a.section_id)
@@ -1504,7 +1883,10 @@ def get_faculty(current_user):
         })
     return jsonify(faculty_list)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/faculty', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1524,7 +1906,10 @@ def create_faculty(current_user):
     db.session.commit()
     return jsonify({'id': faculty.faculty_id, 'name': user.name, 'email': user.email, 'phone': user.phone, 'dept_id': faculty.dept_id}), 201
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/faculty/<int:faculty_id>', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1540,7 +1925,10 @@ def delete_faculty(current_user, faculty_id):
     db.session.commit()
     return jsonify({'message': 'Faculty deleted'})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/faculty/<int:faculty_id>/allocations', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1555,7 +1943,10 @@ def clear_faculty_allocations(current_user, faculty_id):
     db.session.commit()
     return jsonify({'message': f'Cleared {count} allocations'})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/faculty/<int:faculty_id>/timetable', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1576,7 +1967,10 @@ def get_faculty_timetable(current_user, faculty_id):
         })
     return jsonify(output)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/faculty/<int:faculty_id>/allocations', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1586,10 +1980,15 @@ def assign_faculty_allocation(current_user, faculty_id):
     if not data or not all(data.get(k) for k in required):
         return jsonify({'error': 'batch_id, section_id, subject_code are required'}), 400
 
+<<<<<<< HEAD
+=======
+    # ensure faculty exists and belongs to department
+>>>>>>> upstream/master
     faculty = db.session.get(Faculty, faculty_id)
     if not faculty or faculty.dept_id != current_user.dept_id:
         return jsonify({'error': 'Faculty not found'}), 404
 
+<<<<<<< HEAD
     batch = db.session.get(Batch, data['batch_id'])
     section = db.session.get(Section, data['section_id'])
     if (not batch or batch.dept_id != current_user.dept_id or
@@ -1597,6 +1996,17 @@ def assign_faculty_allocation(current_user, faculty_id):
             section.batch_id != data['batch_id']):
         return jsonify({'error': 'Invalid batch or section'}), 400
 
+=======
+    # ensure batch/section belongs to department and section is in batch
+    batch = db.session.get(Batch, data['batch_id'])
+    section = db.session.get(Section, data['section_id'])
+    if (not batch or batch.dept_id != current_user.dept_id or
+        not section or section.dept_id != current_user.dept_id or
+        section.batch_id != data['batch_id']):
+        return jsonify({'error': 'Invalid batch or section'}), 400
+
+    # subject from correct dept and semester
+>>>>>>> upstream/master
     subject = db.session.get(Subject, data['subject_code'])
     if not subject or subject.dept_id != current_user.dept_id:
         return jsonify({'error': 'Invalid subject'}), 400
@@ -1617,7 +2027,10 @@ def assign_faculty_allocation(current_user, faculty_id):
     db.session.commit()
     return jsonify({'message': 'Allocation assigned'}), 201
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/allocations', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1642,7 +2055,10 @@ def get_allocations(current_user):
         })
     return jsonify(data)
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/allocations', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1676,8 +2092,13 @@ def reassign_allocation(current_user):
     batch = db.session.get(Batch, data['batch_id'])
     section = db.session.get(Section, data['section_id'])
     if (not batch or batch.dept_id != current_user.dept_id or
+<<<<<<< HEAD
             not section or section.dept_id != current_user.dept_id or
             section.batch_id != data['batch_id']):
+=======
+        not section or section.dept_id != current_user.dept_id or
+        section.batch_id != data['batch_id']):
+>>>>>>> upstream/master
         return jsonify({'error': 'Invalid batch or section'}), 400
 
     subject = db.session.get(Subject, data['subject_code'])
@@ -1707,7 +2128,10 @@ def reassign_allocation(current_user):
     db.session.commit()
     return jsonify({'message': 'Allocation reassigned successfully'})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/sections/<int:section_id>/timetable', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1820,7 +2244,10 @@ def download_section_timetable(current_user, section_id):
     response.headers['Content-Disposition'] = f'attachment; filename=section_{section.section_name}_{section.batch_id}_timetable.pdf'
     return response
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/sections/<int:section_id>/faculty', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1834,12 +2261,20 @@ def get_section_faculty(current_user, section_id):
         data.append({'faculty_id': fid, 'name': user.name if user else None})
     return jsonify(data)
 
+<<<<<<< HEAD
 
+=======
+# ── Student Management ────────────────────────────────
+>>>>>>> upstream/master
 @dept_bp.route('/students', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
 def get_students(current_user):
     query = Student.query.filter_by(dept_id=current_user.dept_id)
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     batch_id = request.args.get('batch_id')
     program_id = request.args.get('program_id')
     semester = request.args.get('semester')
@@ -1893,6 +2328,10 @@ def get_students(current_user):
         if assign2:
             assignment_total += min(assign2.obtained_marks, assign2.max_marks or 0)
         assignment_total = min(assignment_total, 10)
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
         total_marks = round(best_mid + assignment_total, 2)
 
         if attendance_lt:
@@ -1921,8 +2360,13 @@ def get_students(current_user):
             'attendance_pct': attendance_pct,
             'total_marks': total_marks,
         })
+<<<<<<< HEAD
     return jsonify(student_list)
 
+=======
+
+    return jsonify(student_list)
+>>>>>>> upstream/master
 
 @dept_bp.route('/students', methods=['POST'])
 @token_required
@@ -1932,12 +2376,20 @@ def create_student(current_user):
     required = ['name', 'email', 'password', 'roll_no', 'batch_id', 'section_id', 'student_type', 'category']
     if not data or not all(data.get(k) for k in required):
         return jsonify({'error': 'name, email, password, roll_no, batch_id, section_id, student_type, category are required'}), 400
+<<<<<<< HEAD
+=======
+    # Ensure batch_id and section_id are integers
+>>>>>>> upstream/master
     try:
         batch_id = int(data['batch_id'])
         section_id = int(data['section_id'])
     except (ValueError, TypeError):
         return jsonify({'error': 'batch_id and section_id must be integers'}), 400
+<<<<<<< HEAD
 
+=======
+    # Check if batch and section are in the same dept
+>>>>>>> upstream/master
     batch = db.session.get(Batch, batch_id)
     section = db.session.get(Section, section_id)
     if not batch or batch.dept_id != current_user.dept_id:
@@ -1946,14 +2398,20 @@ def create_student(current_user):
         return jsonify({'error': 'Invalid section'}), 400
     if section.batch_id != batch_id:
         return jsonify({'error': 'Section does not belong to this batch'}), 400
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
     email = normalize_email(data['email'])
     roll_no = data['roll_no'].strip().upper()
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already exists'}), 409
     if Student.query.filter_by(roll_no=roll_no, dept_id=current_user.dept_id).first():
         return jsonify({'error': 'Roll number already exists'}), 409
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
     phone = (data.get('phone') or '').strip()
     student_type = data.get('student_type', 'Regular')
     passport_number = (data.get('passport_number') or '').strip() or None
@@ -1980,7 +2438,10 @@ def create_student(current_user):
     db.session.commit()
     return jsonify({'id': student.student_id, 'name': user.name, 'roll_no': student.roll_no}), 201
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/students/bulk', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1988,6 +2449,10 @@ def bulk_upload_students(current_user):
     csv_file = request.files.get('file')
     if not csv_file:
         return jsonify({'error': 'file is required'}), 400
+<<<<<<< HEAD
+=======
+
+>>>>>>> upstream/master
     filename = csv_file.filename.lower()
     supported = ['.csv', '.xlsx', '.xls']
     if not any(filename.endswith(ext) for ext in supported):
@@ -2034,6 +2499,7 @@ def bulk_upload_students(current_user):
                 'entrance_marks': row.get('entrance_marks') or 0,
                 'phone': str(row.get('phone', '')).strip(),
             }
+<<<<<<< HEAD
             if not data['name'] or not data['email'] or not data['roll_no'] or not data['batch_id'] or not data['section_id']:
                 errors.append({'row': idx, 'error': 'Missing required fields'})
                 continue
@@ -2048,6 +2514,28 @@ def bulk_upload_students(current_user):
             if User.query.filter_by(email=email).first() or Student.query.filter_by(roll_no=data['roll_no'].upper(), dept_id=current_user.dept_id).first():
                 errors.append({'row': idx, 'error': 'Duplicate user or roll number'})
                 continue
+=======
+
+            if not data['name'] or not data['email'] or not data['roll_no'] or not data['batch_id'] or not data['section_id']:
+                errors.append({'row': idx, 'error': 'Missing required fields'})
+                continue
+
+            data['batch_id'] = int(data['batch_id'])
+            data['section_id'] = int(data['section_id'])
+
+            # Reuse create_student logic by direct insertion to avoid nested request call
+            batch = db.session.get(Batch, data['batch_id'])
+            section = db.session.get(Section, data['section_id'])
+            if not batch or batch.dept_id != current_user.dept_id or not section or section.dept_id != current_user.dept_id or section.batch_id != batch.batch_id:
+                errors.append({'row': idx, 'error': 'Invalid batch or section'});
+                continue
+
+            email = normalize_email(data['email'])
+            if User.query.filter_by(email=email).first() or Student.query.filter_by(roll_no=data['roll_no'].upper(), dept_id=current_user.dept_id).first():
+                errors.append({'row': idx, 'error': 'Duplicate user or roll number'});
+                continue
+
+>>>>>>> upstream/master
             user = User(name=data['name'], email=email, password_hash=hash_password(data['password']), phone=data['phone'], role='STUDENT', dept_id=current_user.dept_id, college_id=current_user.college_id)
             db.session.add(user)
             db.session.flush()
@@ -2074,7 +2562,10 @@ def bulk_upload_students(current_user):
     db.session.commit()
     return jsonify({'created': created, 'errors': errors})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/students/<int:student_id>', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -2089,11 +2580,18 @@ def delete_student(current_user, student_id):
     db.session.commit()
     return jsonify({'message': 'Student deleted'})
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> upstream/master
 @dept_bp.route('/batches/<int:batch_id>/students', methods=['DELETE'])
 @token_required
 @role_required('DEPT_ADMIN')
 def delete_batch_students(current_user, batch_id):
+<<<<<<< HEAD
+=======
+    """Delete all students in a batch"""
+>>>>>>> upstream/master
     batch = db.session.get(Batch, batch_id)
     if not batch or batch.dept_id != current_user.dept_id:
         return jsonify({'error': 'Batch not found'}), 404

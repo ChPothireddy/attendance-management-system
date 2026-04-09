@@ -11,10 +11,19 @@ import {
 } from 'react-icons/hi';
 
 const slotLabels = [
+<<<<<<< HEAD
   '09:00-10:40',
   '10:40-12:20',
   '01:30-03:10',
   '03:10-04:00',
+=======
+  '09:00-09:50',
+  '09:50-10:40',
+  '10:40-11:30',
+  '11:30-12:20',
+  '01:30-02:20',
+  '02:20-03:10',
+>>>>>>> upstream/master
 ];
 
 export default function ManageAllocations() {
@@ -255,6 +264,7 @@ export default function ManageAllocations() {
       toast.error(err.response?.data?.error || 'Failed to download timetable');
     }
   };
+<<<<<<< HEAD
   const renderSlot = (slot, day) => (
   <>
     <select
@@ -276,6 +286,8 @@ export default function ManageAllocations() {
     </div>
   </>
 );
+=======
+>>>>>>> upstream/master
 
   return (
     <div className="page-container">
@@ -442,17 +454,26 @@ export default function ManageAllocations() {
                 <thead>
                   <tr>
                     <th>Day</th>
+<<<<<<< HEAD
                     <th>P1<br />{slotLabels[0]}</th>
 <th>P2<br />{slotLabels[1]}</th>
 <th style={{ background: '#f3f4f6', fontWeight: 700 }}>LUNCH</th>
 <th>P3<br />{slotLabels[2]}</th>
 <th>P4<br />{slotLabels[3]}</th>
+=======
+                    {slotLabels.map((label, index) => (
+                      <th key={label}>
+                        P{index + 1}<br />{label}
+                      </th>
+                    ))}
+>>>>>>> upstream/master
                   </tr>
                 </thead>
                 <tbody>
                   {timetable.grid.map((day) => (
                     <tr key={day.day_order}>
                       <td style={{ fontWeight: 700 }}>{day.day_name}</td>
+<<<<<<< HEAD
                       {/* P1 */}
 <td style={{ minWidth: 165 }}>
   {renderSlot(day.slots[0], day)}
@@ -477,6 +498,28 @@ export default function ManageAllocations() {
 <td style={{ minWidth: 165 }}>
   {renderSlot(day.slots[3], day)}
 </td>
+=======
+                      {day.slots.map((slot) => (
+                        <td key={`${day.day_order}-${slot.slot_index}`} style={{ minWidth: 165 }}>
+                          <select
+                            className="form-control"
+                            value={slot.subject_code || ''}
+                            onChange={(e) => handleSlotChange(day.day_order, slot.slot_index, e.target.value)}
+                          >
+                            <option value="">{slot.activity_label || 'Library / Activity'}</option>
+                            {timetable.allocated_subjects.map((subject) => (
+                              <option key={subject.subject_code} value={subject.subject_code}>
+                                {subject.subject_code}
+                              </option>
+                            ))}
+                          </select>
+                          <div style={{ marginTop: 8, fontSize: '0.78rem', color: 'var(--gray-500)' }}>
+                            {slot.subject_name || slot.activity_label || 'Library / Activity'}
+                            {slot.faculty_name ? ` - ${slot.faculty_name}` : ''}
+                          </div>
+                        </td>
+                      ))}
+>>>>>>> upstream/master
                     </tr>
                   ))}
                 </tbody>

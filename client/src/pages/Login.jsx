@@ -5,10 +5,17 @@ import { HiOutlineAcademicCap } from 'react-icons/hi';
 import './Login.css';
 
 const demoAccounts = [
+<<<<<<< HEAD
   { label: 'Super Admin', email: 'superadmin@demo.com', password: 'superadmin123' },
   { label: 'Dept Admin',  email: 'admin@demo.com',      password: 'admin123' },
   { label: 'Faculty',     email: 'anil@demo.com',       password: 'faculty123' },
   { label: 'Student',     email: 'sa0@demo.com',        password: 'student123' },
+=======
+  { label: 'Super Admin', email: 'collegeadmin@auce.edu.in', password: 'collegeadmin@123' },
+  { label: 'Dept Admin', email: '	cse@auce.edu.iin', password: 'Admin@123' },
+  { label: 'Faculty', email: 'srinivas@auce.edu.in', password: 'Faculty@123' },
+  { label: 'Student', email: 'student@auce.edu.in', password: 'Student@123' },
+>>>>>>> upstream/master
 ];
 
 export default function Login() {
