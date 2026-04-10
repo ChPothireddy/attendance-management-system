@@ -14,7 +14,7 @@ export default function MyAttendance() {
     if (!selectedSubject) {
       API.get('/student/attendance').then(r => setRecords(r.data)).catch(() => {});
     } else {
-      API.get(`/student/attendance?subject_id=${selectedSubject}`).then(r => setRecords(r.data)).catch(() => {});
+      API.get(`/student/attendance?subject_code=${selectedSubject}`).then(r => setRecords(r.data)).catch(() => {});
     }
   }, [selectedSubject]);
 
@@ -30,7 +30,7 @@ export default function MyAttendance() {
             <tbody>
               {summary.length === 0 ? <tr><td colSpan="6" style={{textAlign:'center',padding:'40px',color:'var(--gray-400)'}}>No attendance data</td></tr> :
               summary.map(s => (
-                <tr key={s.subject_id} style={{cursor:'pointer'}} onClick={() => setSelectedSubject(s.subject_id)}>
+                <tr key={s.subject_code} style={{cursor:'pointer'}} onClick={() => setSelectedSubject(s.subject_code)}>
                   <td style={{fontWeight:600}}>{s.subject_name}</td>
                   <td><span className="badge badge-info">{s.subject_code}</span></td>
                   <td>{s.total}</td>
@@ -62,10 +62,10 @@ export default function MyAttendance() {
             <tbody>
               {records.length === 0 ? <tr><td colSpan="3" style={{textAlign:'center',padding:'40px',color:'var(--gray-400)'}}>No records</td></tr> :
               records.slice(0, 50).map(r => (
-                <tr key={r.id}>
+                <tr key={`${r.session_id}-${r.student_id}`}>
                   <td>{new Date(r.date).toLocaleDateString('en-IN', {day:'2-digit',month:'short',year:'numeric'})}</td>
-                  <td>{r.subject_name}</td>
-                  <td><span className={`badge badge-${r.status}`}>{r.status}</span></td>
+                  <td>{r.subject_code}</td>
+                  <td><span className={`badge badge-${r.status === 'present' ? 'present' : 'absent'}`}>{r.status}</span></td>
                 </tr>
               ))}
             </tbody>

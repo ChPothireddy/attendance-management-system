@@ -1,14 +1,14 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { HiOutlineAcademicCap } from 'react-icons/hi';
 import './Login.css';
 
 const demoAccounts = [
-  { label: 'Super Admin', email: 'superadmin@university.com', password: 'Admin@123' },
-  { label: 'Dept Admin', email: 'rajesh@university.com', password: 'Admin@123' },
-  { label: 'Faculty', email: 'anil@university.com', password: 'Faculty@123' },
-  { label: 'Student', email: 'aarav.patel0@student.university.com', password: 'Student@123' },
+  { label: 'Super Admin', email: 'collegeadmin@auce.edu.in', password: 'collegeadmin@123' },
+  { label: 'Dept Admin', email: '	cse@auce.edu.iin', password: 'Admin@123' },
+  { label: 'Faculty', email: 'srinivas@auce.edu.in', password: 'Faculty@123' },
+  { label: 'Student', email: 'student@auce.edu.in', password: 'Student@123' },
 ];
 
 export default function Login() {
@@ -67,7 +67,7 @@ export default function Login() {
             <input
               type="password"
               className="form-control"
-              placeholder="••••••••"
+              placeholder="Enter your password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
@@ -78,11 +78,15 @@ export default function Login() {
           </button>
         </form>
 
+        <div className="login-footer-link">
+          New college? <Link to="/register">Register here</Link>
+        </div>
+
         <div className="login-demo">
           <p>Demo Accounts</p>
           <div className="demo-accounts">
             {demoAccounts.map((acc) => (
-              <button key={acc.label} className="demo-btn" onClick={() => fillDemo(acc)}>
+              <button type="button" key={acc.label} className="demo-btn" onClick={() => fillDemo(acc)}>
                 {acc.label}
               </button>
             ))}

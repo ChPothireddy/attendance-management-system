@@ -3,217 +3,372 @@ from datetime import datetime, timezone
 
 db = SQLAlchemy()
 
+
+class College(db.Model):
+    __tablename__ = 'colleges'
+    college_id = db.Column(db.Integer, primary_key=True)
+    college_name = db.Column(db.String(150), nullable=False, unique=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'id': self.college_id,
+            'name': self.college_name,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+# ── Departments ──────────────────────────────────────────────
+class Department(db.Model):
+    __tablename__ = 'departments'
+    dept_id = db.Column(db.Integer, primary_key=True)
+    dept_name = db.Column(db.String(100), nullable=False)
+    college_id = db.Column(db.Integer, db.ForeignKey('colleges.college_id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            'id': self.dept_id,
+            'name': self.dept_name,
+            'college_id': self.college_id,
+        }
+
+# ── Programs ──────────────────────────────────────────────
+class Program(db.Model):
+    __tablename__ = 'programs'
+    program_id = db.Column(db.Integer, primary_key=True)
+    program_name = db.Column(db.String(100), nullable=False)
+    duration_semesters = db.Column(db.Integer, nullable=False)
+
+# ── Batches ──────────────────────────────────────────────
+class Batch(db.Model):
+    __tablename__ = 'batches'
+    batch_id = db.Column(db.Integer, primary_key=True)
+    batch_name = db.Column(db.String(50), nullable=False)
+    dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
+    program_id = db.Column(db.Integer, db.ForeignKey('programs.program_id'), nullable=False)
+
+# ── Sections ──────────────────────────────────────────────
+class Section(db.Model):
+    __tablename__ = 'sections'
+    section_id = db.Column(db.Integer, primary_key=True)
+    section_name = db.Column(db.String(10), nullable=False)
+    current_semester = db.Column(db.Integer, nullable=True, default=1)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
+    program_id = db.Column(db.Integer, db.ForeignKey('programs.program_id'), nullable=True)
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (db.UniqueConstraint('section_name', 'batch_id', name='unique_section_batch'),)
+
+    def to_dict(self):
+        return {
+            'id': self.section_id,
+            'name': self.section_name,
+            'current_semester': self.current_semester,
+            'batch_id': self.batch_id,
+            'dept_id': self.dept_id,
+            'program_id': self.program_id,
+            'updated_at': self.updated_at.isoformat() if self.updated_at else None,
+        }
+
+# ── Subjects ──────────────────────────────────────────────
+class Subject(db.Model):
+    __tablename__ = 'subjects'
+    subject_code = db.Column(db.String(20), primary_key=True)
+    subject_name = db.Column(db.String(100), nullable=False)
+    semester = db.Column(db.Integer, nullable=True)
+    credits = db.Column(db.Float, nullable=True)
+    periods = db.Column(db.Integer, nullable=True)
+    subject_type = db.Column(db.String(50), nullable=False, default='Common')
+    dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=True)
+    program_id = db.Column(db.Integer, db.ForeignKey('programs.program_id'), nullable=True)
+
+    def to_dict(self):
+        return {
+            'code': self.subject_code,
+            'name': self.subject_name,
+            'semester': self.semester,
+            'credits': self.credits,
+            'periods': self.periods,
+            'subject_type': self.subject_type,
+            'dept_id': self.dept_id,
+            'batch_id': self.batch_id,
+            'program_id': self.program_id,
+        }
+
+# ── Batch Sections ──────────────────────────────────────────────
+class BatchSection(db.Model):
+    __tablename__ = 'batch_sections'
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), primary_key=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), primary_key=True)
+
+# ── Format Subject definitions (batch/sem level, defines format rules) ─────────────────────
+class SectionSubjectFormat(db.Model):
+    __tablename__ = 'section_subject_formats'
+    id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    semester = db.Column(db.Integer, nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    updated_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc), onupdate=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (db.UniqueConstraint('batch_id', 'semester', name='unique_batch_semester_format'),)
+
+# ── Format subject line items (what is in the format) ─────────────────────
+class FormatSubject(db.Model):
+    __tablename__ = 'format_subjects'
+    id = db.Column(db.Integer, primary_key=True)
+    format_id = db.Column(db.Integer, db.ForeignKey('section_subject_formats.id'), nullable=False)
+    subject_code = db.Column(db.String(20), nullable=False)  # format slot code (e.g., CS3101)
+    subject_type = db.Column(db.String(50), nullable=False)
+    mapped_subject_code = db.Column(db.String(20), db.ForeignKey('subjects.subject_code'), nullable=True)  # only for Common slots
+
+    __table_args__ = (db.UniqueConstraint('format_id', 'subject_code', name='unique_format_subject'),)
+
+# ── Section subject assignment (section chooses from format for its electives) ─────────────────────
+class SectionSubjectAssignment(db.Model):
+    __tablename__ = 'section_subject_assignments'
+    id = db.Column(db.Integer, primary_key=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    semester = db.Column(db.Integer, nullable=False)
+    subject_code = db.Column(db.String(20), db.ForeignKey('subjects.subject_code'), nullable=False)
+    format_code = db.Column(db.String(20), nullable=True)
+    subject_type = db.Column(db.String(50), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.UniqueConstraint('section_id', 'semester', 'subject_code', name='unique_section_semester_subject'),
+    )
+
 # ── Users ──────────────────────────────────────────────
 class User(db.Model):
     __tablename__ = 'users'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
+    user_id = db.Column(db.Integer, primary_key=True)
     email = db.Column(db.String(120), unique=True, nullable=False)
+    role = db.Column(db.String(20), nullable=False)  # DEPT_ADMIN, FACULTY, STUDENT
     password_hash = db.Column(db.String(255), nullable=False)
-    role = db.Column(db.String(20), nullable=False)  # super_admin, dept_admin, faculty, student
-    college_id = db.Column(db.Integer, db.ForeignKey('colleges.id'), nullable=True)
-    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=True)
-    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=True)
-    enrollment_no = db.Column(db.String(50), nullable=True)
+    name = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(20), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    college = db.relationship('College', backref='users', lazy=True)
-    branch = db.relationship('Branch', backref='users', lazy=True)
-    section = db.relationship('Section', backref='users', lazy=True)
+    dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=True)  # For DEPT_ADMIN
+    college_id = db.Column(db.Integer, db.ForeignKey('colleges.college_id'), nullable=True)
 
     def to_dict(self):
         return {
-            'id': self.id,
-            'name': self.name,
+            'user_id': self.user_id,
             'email': self.email,
             'role': self.role,
-            'college_id': self.college_id,
-            'branch_id': self.branch_id,
-            'section_id': self.section_id,
-            'enrollment_no': self.enrollment_no,
+            'name': self.name,
             'phone': self.phone,
-            'college_name': self.college.name if self.college else None,
-            'branch_name': self.branch.name if self.branch else None,
-            'section_name': self.section.name if self.section else None,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-        }
-
-# ── Colleges ───────────────────────────────────────────
-class College(db.Model):
-    __tablename__ = 'colleges'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), nullable=False)
-    code = db.Column(db.String(20), unique=True, nullable=False)
-    address = db.Column(db.String(300), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    branches = db.relationship('Branch', backref='college', lazy=True, cascade='all, delete-orphan')
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'code': self.code,
-            'address': self.address,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-            'branch_count': len(self.branches),
-        }
-
-# ── Branches (Departments) ────────────────────────────
-class Branch(db.Model):
-    __tablename__ = 'branches'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    code = db.Column(db.String(20), nullable=False)
-    college_id = db.Column(db.Integer, db.ForeignKey('colleges.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    sections = db.relationship('Section', backref='branch', lazy=True, cascade='all, delete-orphan')
-    subjects = db.relationship('Subject', backref='branch', lazy=True, cascade='all, delete-orphan')
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'code': self.code,
+            'dept_id': self.dept_id,
             'college_id': self.college_id,
-            'college_name': self.college.name if self.college else None,
-            'section_count': len(self.sections),
-            'subject_count': len(self.subjects),
-            'created_at': self.created_at.isoformat() if self.created_at else None,
         }
 
-# ── Sections ──────────────────────────────────────────
-class Section(db.Model):
-    __tablename__ = 'sections'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(20), nullable=False)
-    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=False)
-    semester = db.Column(db.Integer, nullable=False, default=1)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+# ── Faculties ──────────────────────────────────────────────
+class Faculty(db.Model):
+    __tablename__ = 'faculties'
+    faculty_id = db.Column(db.Integer, primary_key=True)
+    user_id = db.Column(db.Integer, db.ForeignKey('users.user_id'), nullable=False)
+    dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
 
     def to_dict(self):
         return {
-            'id': self.id,
-            'name': self.name,
-            'branch_id': self.branch_id,
-            'branch_name': self.branch.name if self.branch else None,
-            'semester': self.semester,
-            'created_at': self.created_at.isoformat() if self.created_at else None,
-        }
-
-# ── Subjects ──────────────────────────────────────────
-class Subject(db.Model):
-    __tablename__ = 'subjects'
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(120), nullable=False)
-    code = db.Column(db.String(20), nullable=False)
-    branch_id = db.Column(db.Integer, db.ForeignKey('branches.id'), nullable=False)
-    semester = db.Column(db.Integer, nullable=False, default=1)
-    credits = db.Column(db.Integer, nullable=False, default=3)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'name': self.name,
-            'code': self.code,
-            'branch_id': self.branch_id,
-            'branch_name': self.branch.name if self.branch else None,
-            'semester': self.semester,
-            'credits': self.credits,
-        }
-
-# ── Faculty Allocations ──────────────────────────────
-class FacultyAllocation(db.Model):
-    __tablename__ = 'faculty_allocations'
-    id = db.Column(db.Integer, primary_key=True)
-    faculty_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=False)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    faculty = db.relationship('User', backref='allocations', lazy=True)
-    section = db.relationship('Section', backref='allocations', lazy=True)
-    subject = db.relationship('Subject', backref='allocations', lazy=True)
-
-    def to_dict(self):
-        return {
-            'id': self.id,
             'faculty_id': self.faculty_id,
-            'faculty_name': self.faculty.name if self.faculty else None,
+            'user_id': self.user_id,
+            'dept_id': self.dept_id,
+        }
+
+# ── Faculty Batch Sections ──────────────────────────────────────────────
+class FacultyBatchSection(db.Model):
+    __tablename__ = 'faculty_batch_sections'
+    faculty_id = db.Column(db.Integer, db.ForeignKey('faculties.faculty_id'), primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), primary_key=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), primary_key=True)
+    subject_code = db.Column(db.String(20), primary_key=True)
+
+    def to_dict(self):
+        return {
+            'faculty_id': self.faculty_id,
+            'batch_id': self.batch_id,
             'section_id': self.section_id,
-            'section_name': self.section.name if self.section else None,
-            'subject_id': self.subject_id,
-            'subject_name': self.subject.name if self.subject else None,
-            'subject_code': self.subject.code if self.subject else None,
+            'subject_code': self.subject_code,
         }
 
-# ── Attendance ────────────────────────────────────────
-class Attendance(db.Model):
-    __tablename__ = 'attendance'
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
-    section_id = db.Column(db.Integer, db.ForeignKey('sections.id'), nullable=False)
+# ── Students ──────────────────────────────────────────────
+class Student(db.Model):
+    __tablename__ = 'students'
+    student_id = db.Column(db.Integer, primary_key=True)
+    roll_no = db.Column(db.String(20), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=False)
+    email = db.Column(db.String(120), nullable=False)
+    phone = db.Column(db.String(20), nullable=False)
+    student_type = db.Column(db.String(20), nullable=False, default='Regular')
+    passport_number = db.Column(db.String(120), nullable=True)
+    category = db.Column(db.String(120), nullable=True)
+    entrance_marks = db.Column(db.Float, nullable=True, default=0.0)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'student_id': self.student_id,
+            'roll_no': self.roll_no,
+            'batch_id': self.batch_id,
+            'section_id': self.section_id,
+            'dept_id': self.dept_id,
+            'email': self.email,
+            'phone': self.phone,
+            'student_type': self.student_type,
+            'passport_number': self.passport_number,
+            'category': self.category,
+            'entrance_marks': self.entrance_marks,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+# ── Semesters ──────────────────────────────────────────────
+class Semester(db.Model):
+    __tablename__ = 'semesters'
+    semester_id = db.Column(db.Integer, primary_key=True)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    semester_no = db.Column(db.Integer, nullable=False)
+    is_active = db.Column(db.Boolean, default=False)
+
+# ── Attendance Sessions ──────────────────────────────────────────────
+class AttendanceSession(db.Model):
+    __tablename__ = 'attendance_sessions'
+    session_id = db.Column(db.Integer, primary_key=True)
+    semester_id = db.Column(db.Integer, db.ForeignKey('semesters.semester_id'), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    faculty_id = db.Column(db.Integer, db.ForeignKey('faculties.faculty_id'), nullable=False)
     date = db.Column(db.Date, nullable=False)
-    status = db.Column(db.String(10), nullable=False, default='present')  # present, absent, late
-    marked_by = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    subject_code = db.Column(db.String(20), nullable=False)
 
-    student = db.relationship('User', foreign_keys=[student_id], backref='attendance_records', lazy=True)
-    subject = db.relationship('Subject', backref='attendance_records', lazy=True)
-    section = db.relationship('Section', backref='attendance_records', lazy=True)
-    marker = db.relationship('User', foreign_keys=[marked_by], lazy=True)
+# ── Attendance Records ──────────────────────────────────────────────
+class AttendanceRecord(db.Model):
+    __tablename__ = 'attendance_records'
+    session_id = db.Column(db.Integer, db.ForeignKey('attendance_sessions.session_id'), primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.student_id'), primary_key=True)
+    status = db.Column(db.String(1), nullable=False)  # P, A
 
-    __table_args__ = (
-        db.UniqueConstraint('student_id', 'subject_id', 'date', name='uq_attendance'),
-    )
 
-    def to_dict(self):
-        return {
-            'id': self.id,
-            'student_id': self.student_id,
-            'student_name': self.student.name if self.student else None,
-            'enrollment_no': self.student.enrollment_no if self.student else None,
-            'subject_id': self.subject_id,
-            'subject_name': self.subject.name if self.subject else None,
-            'date': self.date.isoformat() if self.date else None,
-            'status': self.status,
-        }
-
-# ── Marks ─────────────────────────────────────────────
-class Marks(db.Model):
+class Mark(db.Model):
     __tablename__ = 'marks'
-    id = db.Column(db.Integer, primary_key=True)
-    student_id = db.Column(db.Integer, db.ForeignKey('users.id'), nullable=False)
-    subject_id = db.Column(db.Integer, db.ForeignKey('subjects.id'), nullable=False)
-    exam_type = db.Column(db.String(50), nullable=False)  # mid1, mid2, final, assignment, quiz
-    max_marks = db.Column(db.Float, nullable=False, default=100)
+    mark_id = db.Column(db.Integer, primary_key=True)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.student_id'), nullable=False)
+    subject_code = db.Column(db.String(20), nullable=False)
+    exam_type = db.Column(db.String(30), nullable=False)
+    max_marks = db.Column(db.Float, nullable=False)
     obtained_marks = db.Column(db.Float, nullable=False, default=0)
-    remarks = db.Column(db.String(200), nullable=True)
-    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
-
-    student = db.relationship('User', backref='marks_records', lazy=True)
-    subject = db.relationship('Subject', backref='marks_records', lazy=True)
+    remarks = db.Column(db.String(255), nullable=True)
 
     __table_args__ = (
-        db.UniqueConstraint('student_id', 'subject_id', 'exam_type', name='uq_marks'),
+        db.UniqueConstraint('student_id', 'subject_code', 'exam_type', name='unique_student_subject_exam'),
     )
 
     def to_dict(self):
         return {
-            'id': self.id,
+            'mark_id': self.mark_id,
             'student_id': self.student_id,
-            'student_name': self.student.name if self.student else None,
-            'enrollment_no': self.student.enrollment_no if self.student else None,
-            'subject_id': self.subject_id,
-            'subject_name': self.subject.name if self.subject else None,
-            'subject_code': self.subject.code if self.subject else None,
+            'subject_code': self.subject_code,
             'exam_type': self.exam_type,
             'max_marks': self.max_marks,
             'obtained_marks': self.obtained_marks,
-            'percentage': round((self.obtained_marks / self.max_marks) * 100, 1) if self.max_marks else 0,
             'remarks': self.remarks,
         }
+
+
+class Assignment(db.Model):
+    __tablename__ = 'assignments'
+    assignment_id = db.Column(db.Integer, primary_key=True)
+    title = db.Column(db.String(150), nullable=False)
+    description = db.Column(db.Text, nullable=True)
+    subject_code = db.Column(db.String(20), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    faculty_id = db.Column(db.Integer, db.ForeignKey('faculties.faculty_id'), nullable=False)
+    due_date = db.Column(db.Date, nullable=True)
+    marks_slot = db.Column(db.String(30), nullable=True)
+    max_marks = db.Column(db.Float, nullable=True)
+    attachment_name = db.Column(db.String(255), nullable=True)
+    attachment_path = db.Column(db.String(255), nullable=True)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    def to_dict(self):
+        return {
+            'assignment_id': self.assignment_id,
+            'title': self.title,
+            'description': self.description,
+            'subject_code': self.subject_code,
+            'batch_id': self.batch_id,
+            'section_id': self.section_id,
+            'faculty_id': self.faculty_id,
+            'due_date': self.due_date.isoformat() if self.due_date else None,
+            'marks_slot': self.marks_slot,
+            'max_marks': self.max_marks,
+            'attachment_name': self.attachment_name,
+            'attachment_path': self.attachment_path,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+
+class AssignmentSubmission(db.Model):
+    __tablename__ = 'assignment_submissions'
+    submission_id = db.Column(db.Integer, primary_key=True)
+    assignment_id = db.Column(db.Integer, db.ForeignKey('assignments.assignment_id'), nullable=False)
+    student_id = db.Column(db.Integer, db.ForeignKey('students.student_id'), nullable=False)
+    file_name = db.Column(db.String(255), nullable=True)
+    file_path = db.Column(db.String(255), nullable=True)
+    submitted_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+    marks_awarded = db.Column(db.Float, nullable=True)
+    feedback = db.Column(db.String(255), nullable=True)
+
+    __table_args__ = (
+        db.UniqueConstraint('assignment_id', 'student_id', name='unique_assignment_submission'),
+    )
+
+    def to_dict(self):
+        return {
+            'submission_id': self.submission_id,
+            'assignment_id': self.assignment_id,
+            'student_id': self.student_id,
+            'file_name': self.file_name,
+            'file_path': self.file_path,
+            'submitted_at': self.submitted_at.isoformat() if self.submitted_at else None,
+            'marks_awarded': self.marks_awarded,
+            'feedback': self.feedback,
+        }
+
+
+class TimetableEntry(db.Model):
+    __tablename__ = 'timetable_entries'
+    entry_id = db.Column(db.Integer, primary_key=True)
+    section_id = db.Column(db.Integer, db.ForeignKey('sections.section_id'), nullable=False)
+    batch_id = db.Column(db.Integer, db.ForeignKey('batches.batch_id'), nullable=False)
+    faculty_id = db.Column(db.Integer, db.ForeignKey('faculties.faculty_id'), nullable=False)
+    subject_code = db.Column(db.String(20), db.ForeignKey('subjects.subject_code'), nullable=False)
+    day_order = db.Column(db.Integer, nullable=False)
+    day_name = db.Column(db.String(12), nullable=False)
+    slot_index = db.Column(db.Integer, nullable=False)
+    slot_label = db.Column(db.String(32), nullable=False)
+    created_at = db.Column(db.DateTime, default=lambda: datetime.now(timezone.utc))
+
+    __table_args__ = (
+        db.UniqueConstraint('section_id', 'day_order', 'slot_index', name='unique_section_day_slot'),
+        db.UniqueConstraint('faculty_id', 'day_order', 'slot_index', name='unique_faculty_day_slot'),
+    )
+
+    def to_dict(self):
+        return {
+            'entry_id': self.entry_id,
+            'section_id': self.section_id,
+            'batch_id': self.batch_id,
+            'faculty_id': self.faculty_id,
+            'subject_code': self.subject_code,
+            'day_order': self.day_order,
+            'day_name': self.day_name,
+            'slot_index': self.slot_index,
+            'slot_label': self.slot_label,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+        }
+
+

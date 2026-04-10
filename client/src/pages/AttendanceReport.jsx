@@ -1,8 +1,5 @@
 import { useState, useEffect } from 'react';
 import API from '../api/axios';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
-
-const COLORS_BAR = ['#10b981', '#f59e0b', '#ef4444'];
 
 export default function AttendanceReport() {
   const [allocations, setAllocations] = useState([]);
@@ -15,7 +12,7 @@ export default function AttendanceReport() {
 
   useEffect(() => {
     if (!selectedAlloc) return;
-    API.get(`/faculty/attendance/report?subject_id=${selectedAlloc.subject_id}&section_id=${selectedAlloc.section_id}`)
+    API.get(`/faculty/attendance/report?subject_code=${selectedAlloc.subject_code}&section_id=${selectedAlloc.section_id}`)
       .then(r => setReport(r.data)).catch(() => {});
   }, [selectedAlloc]);
 
@@ -37,23 +34,6 @@ export default function AttendanceReport() {
 
       {selectedAlloc && report.length > 0 && (
         <>
-          <div className="card" style={{marginBottom:'20px'}}>
-            <h2 style={{fontSize:'1.1rem',fontWeight:700,marginBottom:'16px'}}>Attendance Distribution</h2>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={report} margin={{top:5,right:20,left:0,bottom:5}}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--gray-200)" />
-                <XAxis dataKey="enrollment_no" fontSize={11} tick={{fill:'var(--gray-500)'}} />
-                <YAxis domain={[0, 100]} fontSize={12} tick={{fill:'var(--gray-500)'}} />
-                <Tooltip contentStyle={{borderRadius:'8px',border:'none',boxShadow:'var(--shadow-lg)'}} />
-                <Bar dataKey="percentage" radius={[4,4,0,0]} name="Attendance %">
-                  {report.map((entry, i) => (
-                    <Cell key={i} fill={entry.percentage >= 75 ? '#10b981' : entry.percentage >= 50 ? '#f59e0b' : '#ef4444'} />
-                  ))}
-                </Bar>
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-
           <div className="card">
             <h2 style={{fontSize:'1.1rem',fontWeight:700,marginBottom:'16px'}}>Detailed Report</h2>
             <div className="data-table-wrapper">

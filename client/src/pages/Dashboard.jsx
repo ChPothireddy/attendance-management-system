@@ -13,7 +13,7 @@ const dashboards = {
 
 export default function Dashboard() {
   const { user } = useAuth();
-  const DashboardComponent = dashboards[user?.role];
+  const DashboardComponent = dashboards[user?.role?.toLowerCase()];
 
   if (!DashboardComponent) return <div className="page-container"><p>Unknown role</p></div>;
   return <DashboardComponent />;

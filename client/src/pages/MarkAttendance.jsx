@@ -28,7 +28,7 @@ export default function MarkAttendance() {
   // Load existing attendance for this date
   useEffect(() => {
     if (!selectedAlloc || !date) return;
-    API.get(`/faculty/attendance?subject_id=${selectedAlloc.subject_id}&section_id=${selectedAlloc.section_id}&date=${date}`)
+    API.get(`/faculty/attendance?subject_code=${selectedAlloc.subject_code}&section_id=${selectedAlloc.section_id}&date=${date}`)
       .then(r => {
         if (r.data.length > 0) {
           const existing = {};
@@ -58,7 +58,7 @@ export default function MarkAttendance() {
     try {
       const records = students.map(s => ({ student_id: s.id, status: attendance[s.id] || 'present' }));
       await API.post('/faculty/attendance', {
-        subject_id: selectedAlloc.subject_id,
+        subject_code: selectedAlloc.subject_code,
         section_id: selectedAlloc.section_id,
         date,
         records,

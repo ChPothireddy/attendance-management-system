@@ -33,10 +33,6 @@ export default function DeptAdminDashboard() {
           <div className="stat-icon pink"><HiOutlineUserGroup /></div>
           <div className="stat-info"><h3>{stats.students || 0}</h3><p>Students</p></div>
         </div>
-        <div className="stat-card">
-          <div className="stat-icon blue"><HiOutlineCog /></div>
-          <div className="stat-info"><h3>{stats.allocations || 0}</h3><p>Allocations</p></div>
-        </div>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:'20px'}}>
@@ -44,7 +40,7 @@ export default function DeptAdminDashboard() {
         <QuickAction title="Manage Subjects" desc="Add subjects for your department" to="/subjects" Icon={HiOutlineBookOpen} color="var(--success-600)" />
         <QuickAction title="Manage Faculty" desc="Add and manage faculty members" to="/manage-faculty" Icon={HiOutlineAcademicCap} color="var(--warning-500)" />
         <QuickAction title="Manage Students" desc="Add and manage students" to="/manage-students" Icon={HiOutlineUserGroup} color="var(--accent-600)" />
-        <QuickAction title="Faculty Allocations" desc="Assign faculty to sections & subjects" to="/allocations" Icon={HiOutlineCog} color="var(--gray-600)" />
+        <QuickAction title="Timetable" desc="Manage faculty allocations for sections" to="/allocations" Icon={HiOutlineCog} color="var(--gray-600)" />
       </div>
     </div>
   );

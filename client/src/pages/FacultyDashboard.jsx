@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import API from '../api/axios';
-import { HiOutlineClipboardList, HiOutlineUserGroup, HiOutlineBookOpen, HiOutlineCalendar, HiOutlineChartBar, HiOutlinePencilAlt, HiOutlineTrendingUp, HiOutlineClipboardCheck, HiOutlineDocumentReport } from 'react-icons/hi';
+import { HiOutlineClipboardList, HiOutlineUserGroup, HiOutlineBookOpen, HiOutlineCalendar, HiOutlineChartBar, HiOutlinePencilAlt, HiOutlineClipboardCheck, HiOutlineDocumentReport, HiOutlineDocumentAdd, HiOutlineTable } from 'react-icons/hi';
 
 export default function FacultyDashboard() {
   const [stats, setStats] = useState({});
@@ -37,6 +37,10 @@ export default function FacultyDashboard() {
           <div className="stat-icon blue"><HiOutlineChartBar /></div>
           <div className="stat-info"><h3>{stats.allocations || 0}</h3><p>Allocations</p></div>
         </div>
+        <div className="stat-card">
+          <div className="stat-icon red"><HiOutlineDocumentAdd /></div>
+          <div className="stat-info"><h3>{stats.assignments || 0}</h3><p>Assignments</p></div>
+        </div>
       </div>
 
       <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(300px,1fr))',gap:'20px'}}>
@@ -66,6 +70,20 @@ export default function FacultyDashboard() {
           <div>
             <h3 style={{fontSize:'1rem',fontWeight:600,color:'var(--gray-900)'}}>Marks Report</h3>
             <p style={{fontSize:'0.8rem',color:'var(--gray-500)'}}>View marks distribution and analysis</p>
+          </div>
+        </a>
+        <a href="/faculty-assignments" className="card" style={{textDecoration:'none',display:'flex',alignItems:'center',gap:'16px',cursor:'pointer'}}>
+          <div style={{fontSize:'1.8rem',color:'var(--danger-500)'}}><HiOutlineDocumentAdd /></div>
+          <div>
+            <h3 style={{fontSize:'1rem',fontWeight:600,color:'var(--gray-900)'}}>Assignments</h3>
+            <p style={{fontSize:'0.8rem',color:'var(--gray-500)'}}>Create assignments and review student submissions</p>
+          </div>
+        </a>
+        <a href="/faculty-timetable" className="card" style={{textDecoration:'none',display:'flex',alignItems:'center',gap:'16px',cursor:'pointer'}}>
+          <div style={{fontSize:'1.8rem',color:'var(--gray-700)'}}><HiOutlineTable /></div>
+          <div>
+            <h3 style={{fontSize:'1rem',fontWeight:600,color:'var(--gray-900)'}}>My Timetable</h3>
+            <p style={{fontSize:'0.8rem',color:'var(--gray-500)'}}>View your weekly class schedule and follow section timings</p>
           </div>
         </a>
       </div>

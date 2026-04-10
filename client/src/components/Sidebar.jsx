@@ -3,9 +3,8 @@ import { useAuth } from '../context/AuthContext';
 import {
   HiOutlineHome, HiOutlineAcademicCap, HiOutlineUserGroup,
   HiOutlineClipboardList, HiOutlineChartBar, HiOutlineCog,
-  HiOutlineLogout, HiOutlineOfficeBuilding, HiOutlineBookOpen,
-  HiOutlineViewGrid, HiOutlineDocumentText, HiOutlineUsers,
-  HiOutlineCalendar, HiOutlinePencilAlt
+  HiOutlineLogout, HiOutlineBookOpen, HiOutlineDocumentText, HiOutlineUsers,
+  HiOutlineCalendar, HiOutlinePencilAlt, HiOutlineDocumentAdd, HiOutlineOfficeBuilding, HiOutlineTable
 } from 'react-icons/hi';
 import './Sidebar.css';
 
@@ -13,32 +12,30 @@ const navConfig = {
   super_admin: [
     { section: 'Overview' },
     { to: '/dashboard', label: 'Dashboard', icon: HiOutlineHome },
-    { section: 'Management' },
-    { to: '/colleges', label: 'Colleges', icon: HiOutlineOfficeBuilding },
-    { to: '/branches', label: 'Branches', icon: HiOutlineViewGrid },
-    { to: '/dept-admins', label: 'Dept Admins', icon: HiOutlineUserGroup },
-    { to: '/all-users', label: 'All Users', icon: HiOutlineUsers },
   ],
   dept_admin: [
     { section: 'Overview' },
     { to: '/dashboard', label: 'Dashboard', icon: HiOutlineHome },
     { section: 'Department' },
-    { to: '/sections', label: 'Sections', icon: HiOutlineViewGrid },
+    { to: '/sections', label: 'Sections', icon: HiOutlineOfficeBuilding },
     { to: '/subjects', label: 'Subjects', icon: HiOutlineBookOpen },
     { section: 'People' },
     { to: '/manage-faculty', label: 'Faculty', icon: HiOutlineAcademicCap },
     { to: '/manage-students', label: 'Students', icon: HiOutlineUserGroup },
-    { to: '/allocations', label: 'Allocations', icon: HiOutlineCog },
+    { to: '/allocations', label: 'Timetable', icon: HiOutlineCog },
   ],
   faculty: [
     { section: 'Overview' },
     { to: '/dashboard', label: 'Dashboard', icon: HiOutlineHome },
+    { to: '/faculty-timetable', label: 'My Timetable', icon: HiOutlineTable },
     { section: 'Attendance' },
     { to: '/mark-attendance', label: 'Mark Attendance', icon: HiOutlineClipboardList },
     { to: '/attendance-report', label: 'Attendance Report', icon: HiOutlineChartBar },
     { section: 'Marks' },
     { to: '/enter-marks', label: 'Enter Marks', icon: HiOutlinePencilAlt },
     { to: '/marks-report', label: 'Marks Report', icon: HiOutlineDocumentText },
+    { section: 'Assignments' },
+    { to: '/faculty-assignments', label: 'Assignments', icon: HiOutlineDocumentAdd },
   ],
   student: [
     { section: 'Overview' },
@@ -47,6 +44,7 @@ const navConfig = {
     { to: '/my-attendance', label: 'My Attendance', icon: HiOutlineCalendar },
     { to: '/my-marks', label: 'My Marks', icon: HiOutlineDocumentText },
     { to: '/my-subjects', label: 'My Subjects', icon: HiOutlineBookOpen },
+    { to: '/my-assignments', label: 'Assignments', icon: HiOutlineDocumentAdd },
   ],
 };
 
@@ -60,7 +58,7 @@ const roleLabels = {
 export default function Sidebar() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
-  const items = navConfig[user?.role] || [];
+  const items = navConfig[user?.role?.toLowerCase()] || [];
 
   const handleLogout = () => {
     logout();
@@ -106,7 +104,7 @@ export default function Sidebar() {
           <div className="sidebar-avatar">{initials}</div>
           <div className="sidebar-user-info">
             <div className="sidebar-user-name">{user?.name}</div>
-            <div className="sidebar-user-role">{roleLabels[user?.role]}</div>
+            <div className="sidebar-user-role">{roleLabels[user?.role?.toLowerCase()]}</div>
           </div>
         </div>
         <button className="sidebar-logout" onClick={handleLogout}>

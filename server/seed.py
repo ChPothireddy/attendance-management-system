@@ -1,180 +1,199 @@
-"""
-Database seeder — run this once to populate the database with demo data.
-Usage: python seed.py
-"""
-from app import create_app
-from models import db, User, College, Branch, Section, Subject, FacultyAllocation, Attendance, Marks
-import bcrypt
-from datetime import date, timedelta
-import random
+import argparse
+from pathlib import Path
 
-def hash_pw(password):
-    return bcrypt.hashpw(password.encode('utf-8'), bcrypt.gensalt()).decode('utf-8')
+from flask import Flask
 
-def seed():
-    app = create_app()
+from config import Config
+from models import db, College, Department, Program, Batch, Section, User, Faculty, Student, Subject, SectionSubjectFormat, FormatSubject, SectionSubjectAssignment
+from auth import hash_password
+
+
+def reset_schema_only():
+    app = Flask(__name__, instance_path=str(Path(__file__).resolve().parent / 'instance'))
+    app.config.from_object(Config)
+    db.init_app(app)
+
     with app.app_context():
-        # Clear existing data
         db.drop_all()
         db.create_all()
+        print('Schema reset complete. No demo data inserted.')
 
-        # ── College ────────────────────────────────────
-        college = College(name='Sunrise University', code='SRU', address='123 University Road, Tech City')
+
+def seed_demo_data(reset=False):
+    app = Flask(__name__, instance_path=str(Path(__file__).resolve().parent / 'instance'))
+    app.config.from_object(Config)
+    db.init_app(app)
+
+    with app.app_context():
+        if reset:
+            db.drop_all()
+            db.create_all()
+        else:
+            db.create_all()
+            if College.query.first():
+                print('Database already has data. Skipping demo seed to preserve existing records.')
+                print('Run: python seed.py --reset-demo  (to wipe and reseed)')
+                return
+
+        # Create demo college
+        college = College(college_name='Demo College')
         db.session.add(college)
-        db.session.flush()
-
-        # ── Branches ──────────────────────────────────
-        cse = Branch(name='Computer Science & Engineering', code='CSE', college_id=college.id)
-        ece = Branch(name='Electronics & Communication', code='ECE', college_id=college.id)
-        me = Branch(name='Mechanical Engineering', code='ME', college_id=college.id)
-        db.session.add_all([cse, ece, me])
-        db.session.flush()
-
-        # ── Sections ──────────────────────────────────
-        sections = []
-        for branch in [cse, ece, me]:
-            for sem in [1, 3, 5]:
-                for sec_name in ['A', 'B']:
-                    s = Section(name=sec_name, branch_id=branch.id, semester=sem)
-                    sections.append(s)
-                    db.session.add(s)
-        db.session.flush()
-
-        cse_sem5_a = Section.query.filter_by(branch_id=cse.id, semester=5, name='A').first()
-        cse_sem5_b = Section.query.filter_by(branch_id=cse.id, semester=5, name='B').first()
-
-        # ── Subjects ──────────────────────────────────
-        cse_subjects = [
-            Subject(name='Data Structures & Algorithms', code='CS301', branch_id=cse.id, semester=5, credits=4),
-            Subject(name='Database Management Systems', code='CS302', branch_id=cse.id, semester=5, credits=4),
-            Subject(name='Operating Systems', code='CS303', branch_id=cse.id, semester=5, credits=3),
-            Subject(name='Computer Networks', code='CS304', branch_id=cse.id, semester=5, credits=3),
-            Subject(name='Software Engineering', code='CS305', branch_id=cse.id, semester=5, credits=3),
-        ]
-        ece_subjects = [
-            Subject(name='Digital Signal Processing', code='EC301', branch_id=ece.id, semester=5, credits=4),
-            Subject(name='VLSI Design', code='EC302', branch_id=ece.id, semester=5, credits=3),
-            Subject(name='Microprocessors', code='EC303', branch_id=ece.id, semester=5, credits=3),
-        ]
-        db.session.add_all(cse_subjects + ece_subjects)
-        db.session.flush()
-
-        # ── Users ─────────────────────────────────────
-        super_admin = User(
-            name='Super Admin', email='superadmin@university.com',
-            password_hash=hash_pw('Admin@123'), role='super_admin',
-            college_id=college.id,
-        )
-
-        dept_admin_cse = User(
-            name='Dr. Rajesh Kumar', email='rajesh@university.com',
-            password_hash=hash_pw('Admin@123'), role='dept_admin',
-            college_id=college.id, branch_id=cse.id,
-        )
-        dept_admin_ece = User(
-            name='Dr. Priya Sharma', email='priya@university.com',
-            password_hash=hash_pw('Admin@123'), role='dept_admin',
-            college_id=college.id, branch_id=ece.id,
-        )
-
-        faculty_list = [
-            User(name='Prof. Anil Verma', email='anil@university.com', password_hash=hash_pw('Faculty@123'),
-                 role='faculty', college_id=college.id, branch_id=cse.id, phone='9876543210'),
-            User(name='Prof. Meena Gupta', email='meena@university.com', password_hash=hash_pw('Faculty@123'),
-                 role='faculty', college_id=college.id, branch_id=cse.id, phone='9876543211'),
-            User(name='Prof. Suresh Nair', email='suresh@university.com', password_hash=hash_pw('Faculty@123'),
-                 role='faculty', college_id=college.id, branch_id=cse.id, phone='9876543212'),
-        ]
-
-        db.session.add_all([super_admin, dept_admin_cse, dept_admin_ece] + faculty_list)
-        db.session.flush()
-
-        # ── Students ──────────────────────────────────
-        first_names = ['Aarav', 'Vivaan', 'Aditya', 'Vihaan', 'Arjun', 'Sai', 'Reyansh', 'Ayaan', 'Krishna', 'Ishaan',
-                       'Ananya', 'Diya', 'Myra', 'Sara', 'Aanya', 'Aadhya', 'Ira', 'Saanvi', 'Pari', 'Meera']
-        last_names = ['Patel', 'Sharma', 'Singh', 'Kumar', 'Gupta', 'Joshi', 'Reddy', 'Nair', 'Iyer', 'Das']
-
-        students = []
-        for i, section in enumerate([cse_sem5_a, cse_sem5_b]):
-            for j in range(15):
-                idx = i * 15 + j
-                fn = first_names[idx % len(first_names)]
-                ln = last_names[idx % len(last_names)]
-                student = User(
-                    name=f'{fn} {ln}',
-                    email=f'{fn.lower()}.{ln.lower()}{idx}@student.university.com',
-                    password_hash=hash_pw('Student@123'),
-                    role='student',
-                    college_id=college.id,
-                    branch_id=cse.id,
-                    section_id=section.id,
-                    enrollment_no=f'SRU2024CSE{str(idx + 1).zfill(3)}',
-                    phone=f'98765{str(43200 + idx).zfill(5)}',
-                )
-                students.append(student)
-                db.session.add(student)
-        db.session.flush()
-
-        # ── Faculty Allocations ───────────────────────
-        allocations = [
-            FacultyAllocation(faculty_id=faculty_list[0].id, section_id=cse_sem5_a.id, subject_id=cse_subjects[0].id),
-            FacultyAllocation(faculty_id=faculty_list[0].id, section_id=cse_sem5_a.id, subject_id=cse_subjects[1].id),
-            FacultyAllocation(faculty_id=faculty_list[0].id, section_id=cse_sem5_b.id, subject_id=cse_subjects[0].id),
-            FacultyAllocation(faculty_id=faculty_list[1].id, section_id=cse_sem5_a.id, subject_id=cse_subjects[2].id),
-            FacultyAllocation(faculty_id=faculty_list[1].id, section_id=cse_sem5_b.id, subject_id=cse_subjects[2].id),
-            FacultyAllocation(faculty_id=faculty_list[1].id, section_id=cse_sem5_b.id, subject_id=cse_subjects[1].id),
-            FacultyAllocation(faculty_id=faculty_list[2].id, section_id=cse_sem5_a.id, subject_id=cse_subjects[3].id),
-            FacultyAllocation(faculty_id=faculty_list[2].id, section_id=cse_sem5_a.id, subject_id=cse_subjects[4].id),
-        ]
-        db.session.add_all(allocations)
-        db.session.flush()
-
-        # ── Sample Attendance (last 30 days) ──────────
-        today = date.today()
-        section_a_students = [s for s in students if s.section_id == cse_sem5_a.id]
-        for day_offset in range(30):
-            d = today - timedelta(days=day_offset)
-            if d.weekday() >= 5:  # skip weekends
-                continue
-            for subject in cse_subjects[:3]:
-                for student in section_a_students:
-                    status = random.choices(['present', 'absent', 'late'], weights=[75, 15, 10])[0]
-                    att = Attendance(
-                        student_id=student.id, subject_id=subject.id, section_id=cse_sem5_a.id,
-                        date=d, status=status, marked_by=faculty_list[0].id,
-                    )
-                    db.session.add(att)
-
-        # ── Sample Marks ──────────────────────────────
-        exam_types = ['mid1', 'mid2', 'quiz1', 'assignment1']
-        max_marks_map = {'mid1': 30, 'mid2': 30, 'quiz1': 10, 'assignment1': 10}
-        for subject in cse_subjects[:3]:
-            for student in section_a_students:
-                for exam in exam_types:
-                    mm = max_marks_map[exam]
-                    obtained = round(random.uniform(mm * 0.4, mm), 1)
-                    mark = Marks(
-                        student_id=student.id, subject_id=subject.id,
-                        exam_type=exam, max_marks=mm, obtained_marks=obtained,
-                    )
-                    db.session.add(mark)
-
         db.session.commit()
-        print('✅ Database seeded successfully!')
-        print(f'   College: {college.name}')
-        print(f'   Branches: CSE, ECE, ME')
-        print(f'   Students: {len(students)}')
-        print(f'   Faculty: {len(faculty_list)}')
-        print()
-        print('   Login Credentials:')
-        print('   ┌──────────────┬──────────────────────────────┬──────────────┐')
-        print('   │ Role         │ Email                        │ Password     │')
-        print('   ├──────────────┼──────────────────────────────┼──────────────┤')
-        print('   │ Super Admin  │ superadmin@university.com    │ Admin@123    │')
-        print('   │ Dept Admin   │ rajesh@university.com        │ Admin@123    │')
-        print('   │ Faculty      │ anil@university.com          │ Faculty@123  │')
-        print('   │ Student      │ aarav.patel0@student.uni...  │ Student@123  │')
-        print('   └──────────────┴──────────────────────────────┴──────────────┘')
+
+        # Create demo department
+        dept = Department(dept_name='Computer Science', college_id=college.college_id)
+        db.session.add(dept)
+        db.session.commit()
+
+        # Create demo program
+        program = Program(program_name='B.Tech', duration_semesters=8)
+        db.session.add(program)
+        db.session.commit()
+
+        # Create demo batch
+        batch = Batch(batch_name='2023-2027', dept_id=dept.dept_id, program_id=program.program_id)
+        db.session.add(batch)
+        db.session.commit()
+
+        # Create demo section
+        section = Section(section_name='A', batch_id=batch.batch_id, dept_id=dept.dept_id, program_id=program.program_id)
+        db.session.add(section)
+        db.session.commit()
+
+        # Create demo users
+        # Dept Admin
+        dept_admin = User(
+            email='admin@demo.com',
+            role='DEPT_ADMIN',
+            password_hash=hash_password('admin123'),
+            name='Demo Admin',
+            phone='1234567890',
+            dept_id=dept.dept_id,
+            college_id=college.college_id
+        )
+        db.session.add(dept_admin)
+        db.session.commit()
+
+        # Faculty
+        faculty_user = User(
+            email='faculty@demo.com',
+            role='FACULTY',
+            password_hash=hash_password('faculty123'),
+            name='Demo Faculty',
+            phone='1234567891',
+            dept_id=dept.dept_id,
+            college_id=college.college_id
+        )
+        db.session.add(faculty_user)
+        db.session.commit()
+
+        faculty = Faculty(user_id=faculty_user.user_id, dept_id=dept.dept_id)
+        db.session.add(faculty)
+        db.session.commit()
+
+        # Student
+        student_user = User(
+            email='student@demo.com',
+            role='STUDENT',
+            password_hash=hash_password('student123'),
+            name='Demo Student',
+            phone='1234567892',
+            dept_id=dept.dept_id,
+            college_id=college.college_id
+        )
+        db.session.add(student_user)
+        db.session.commit()
+
+        student = Student(
+            student_id=student_user.user_id,  # Link to user
+            roll_no='CS001',
+            batch_id=batch.batch_id,
+            section_id=section.section_id,
+            dept_id=dept.dept_id,
+            email='student@demo.com',
+            phone='1234567892'
+        )
+        db.session.add(student)
+        db.session.commit()
+
+        # Create demo subjects with credits and periods
+        subjects_data = [
+            # Common subjects
+            {'code': 'CS101', 'name': 'Programming Fundamentals', 'type': 'Common', 'credits': 4.0, 'periods': 4},
+            {'code': 'CS102', 'name': 'Data Structures', 'type': 'Common', 'credits': 4.0, 'periods': 4},
+            {'code': 'CS201', 'name': 'Database Management Systems', 'type': 'Common', 'credits': 3.0, 'periods': 3},
+            {'code': 'CS202', 'name': 'Web Development', 'type': 'Common', 'credits': 3.0, 'periods': 3},
+            # Electives
+            {'code': 'CS301', 'name': 'Machine Learning', 'type': 'Elective', 'credits': 3.0, 'periods': 3},
+            {'code': 'CS302', 'name': 'Computer Networks', 'type': 'Elective', 'credits': 3.0, 'periods': 3},
+            {'code': 'CS303', 'name': 'Software Engineering', 'type': 'Elective', 'credits': 3.0, 'periods': 3},
+            # Open Electives
+            {'code': 'OE101', 'name': 'Digital Marketing', 'type': 'Open Elective', 'credits': 2.0, 'periods': 2},
+            {'code': 'OE102', 'name': 'Entrepreneurship', 'type': 'Open Elective', 'credits': 2.0, 'periods': 2},
+        ]
+
+        for subj_data in subjects_data:
+            subject = Subject(
+                subject_code=subj_data['code'],
+                subject_name=subj_data['name'],
+                subject_type=subj_data['type'],
+                credits=subj_data['credits'],
+                periods=subj_data['periods'],
+                dept_id=dept.dept_id,
+                batch_id=batch.batch_id,
+                program_id=program.program_id
+            )
+            db.session.add(subject)
+        db.session.commit()
+
+        # Create demo format and assignments
+        format = SectionSubjectFormat(batch_id=batch.batch_id, semester=1)
+        db.session.add(format)
+        db.session.commit()
+
+        format_subjects = [
+            FormatSubject(format_id=format.id, subject_code='CS101', subject_type='Common'),
+            FormatSubject(format_id=format.id, subject_code='CS301', subject_type='Elective'),
+            FormatSubject(format_id=format.id, subject_code='OE101', subject_type='Open Elective'),
+        ]
+        for fs in format_subjects:
+            db.session.add(fs)
+        db.session.commit()
+
+        # Assign subjects to section
+        section_assignments = [
+            SectionSubjectAssignment(section_id=section.section_id, subject_code='CS101', semester=1, subject_type='Common'),
+            SectionSubjectAssignment(section_id=section.section_id, subject_code='CS301', semester=1, subject_type='Elective'),
+            SectionSubjectAssignment(section_id=section.section_id, subject_code='OE101', semester=1, subject_type='Open Elective'),
+        ]
+        for sa in section_assignments:
+            db.session.add(sa)
+        db.session.commit()
+
+        print('Demo data seeded successfully!')
+        print('Demo Accounts:')
+        print('Dept Admin: admin@demo.com / admin123')
+        print('Faculty: faculty@demo.com / faculty123')
+        print('Student: student@demo.com / student123')
+        print('')
+        print('Demo Subjects Created:')
+        for subj in subjects_data:
+            print(f"- {subj['type']}: {subj['code']} ({subj['name']}) - {subj['credits']} credits, {subj['periods']} periods")
+        print('')
+        print('Demo Format & Assignments:')
+        print('- Format created for 2023-2027 batch, Semester 1')
+        print('- Section A assigned: CS101 (Common) + CS301 (Elective) + OE101 (Open Elective)')
+
 
 if __name__ == '__main__':
-    seed()
+    parser = argparse.ArgumentParser(description='Seed/reset database for Attendance Management System')
+    parser.add_argument('--reset-schema', action='store_true', help='Drop and recreate schema only')
+    parser.add_argument('--reset-demo', action='store_true', help='Drop and recreate schema, then insert demo data')
+    args = parser.parse_args()
+
+    if args.reset_schema:
+        reset_schema_only()
+    elif args.reset_demo:
+        seed_demo_data(reset=True)
+    else:
+        seed_demo_data(reset=False)

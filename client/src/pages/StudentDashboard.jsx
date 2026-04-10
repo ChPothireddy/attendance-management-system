@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import API from '../api/axios';
 import { useAuth } from '../context/AuthContext';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
-import { HiOutlineBookOpen, HiOutlineCalendar, HiOutlineChartBar, HiOutlineClipboardList, HiOutlineAcademicCap, HiOutlineTrendingUp, HiOutlineCheckCircle, HiOutlineExclamation } from 'react-icons/hi';
+import { HiOutlineBookOpen, HiOutlineCalendar, HiOutlineChartBar, HiOutlineTrendingUp, HiOutlineCheckCircle, HiOutlineExclamation, HiOutlineDocumentAdd } from 'react-icons/hi';
 
 const COLORS = ['#10b981', '#f59e0b', '#ef4444'];
 
@@ -10,10 +10,12 @@ export default function StudentDashboard() {
   const { user } = useAuth();
   const [stats, setStats] = useState({});
   const [attSummary, setAttSummary] = useState([]);
+  const [assignments, setAssignments] = useState([]);
 
   useEffect(() => {
     API.get('/student/stats').then(r => setStats(r.data)).catch(() => {});
     API.get('/student/attendance/summary').then(r => setAttSummary(r.data)).catch(() => {});
+    API.get('/student/assignments').then(r => setAssignments(r.data.slice(0, 5))).catch(() => {});
   }, []);
 
   const overallPie = [
@@ -45,6 +47,10 @@ export default function StudentDashboard() {
         <div className="stat-card">
           <div className="stat-icon pink"><HiOutlineTrendingUp /></div>
           <div className="stat-info"><h3>{stats.avg_marks || 0}%</h3><p>Avg. Marks</p></div>
+        </div>
+        <div className="stat-card">
+          <div className="stat-icon red"><HiOutlineDocumentAdd /></div>
+          <div className="stat-info"><h3>{(stats.total_assignments || 0) - (stats.submitted_assignments || 0)}</h3><p>Pending Assignments</p></div>
         </div>
       </div>
 
@@ -96,6 +102,32 @@ export default function StudentDashboard() {
             <div className="empty-state"><p>No subjects found</p></div>
           )}
         </div>
+      </div>
+
+      <div className="card" style={{ marginTop: '20px' }}>
+        <div className="section-header">
+          <h2>Latest Assignments</h2>
+          <a href="/my-assignments" className="btn btn-secondary btn-sm">View All</a>
+        </div>
+        {assignments.length > 0 ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+            {assignments.map((assignment) => (
+              <div key={assignment.assignment_id} style={{ border: '1px solid var(--gray-100)', borderRadius: '10px', padding: '14px 16px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', gap: '12px', alignItems: 'flex-start' }}>
+                  <div>
+                    <div style={{ fontWeight: 700 }}>{assignment.title}</div>
+                    <div style={{ fontSize: '0.85rem', color: 'var(--gray-500)' }}>{assignment.subject_code} • Due {assignment.due_date || 'N/A'}</div>
+                  </div>
+                  <span className={`badge ${assignment.submitted ? 'badge-present' : 'badge-warning'}`}>
+                    {assignment.submitted ? 'Submitted' : 'Pending'}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="empty-state"><p>No assignments yet</p></div>
+        )}
       </div>
     </div>
   );
