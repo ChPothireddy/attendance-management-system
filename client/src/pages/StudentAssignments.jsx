@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
 import { HiOutlineDownload, HiOutlineUpload } from 'react-icons/hi';
 
-import API from '../api/axios';
+import API, { BACKEND_BASE_URL } from '../api/axios';
 
 export default function StudentAssignments() {
   const [assignments, setAssignments] = useState([]);
@@ -73,7 +73,7 @@ export default function StudentAssignments() {
                     <td>{assignment.due_date || 'N/A'}</td>
                     <td>
                       {assignment.attachment_url ? (
-                        <a href={`http://localhost:5000${assignment.attachment_url}`} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
+                        <a href={`${BACKEND_BASE_URL}${assignment.attachment_url}`} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
                           <HiOutlineDownload /> Download
                         </a>
                       ) : 'No file'}
@@ -82,7 +82,7 @@ export default function StudentAssignments() {
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', minWidth: '220px' }}>
                         {assignment.submission_file_url && (
-                          <a href={`http://localhost:5000${assignment.submission_file_url}`} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
+                          <a href={`${BACKEND_BASE_URL}${assignment.submission_file_url}`} target="_blank" rel="noreferrer" className="btn btn-secondary btn-sm">
                             <HiOutlineDownload /> View Submission
                           </a>
                         )}

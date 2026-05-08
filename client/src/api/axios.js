@@ -1,7 +1,10 @@
 import axios from 'axios';
 
+const BACKEND_BASE_URL = import.meta.env.VITE_API_HOST || 'http://localhost:5000';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || `${BACKEND_BASE_URL}/api`;
+
 const API = axios.create({
-  baseURL: 'http://localhost:5000/api',
+  baseURL: API_BASE_URL,
 });
 
 // Attach JWT token to every request
@@ -29,3 +32,5 @@ API.interceptors.response.use(
 );
 
 export default API;
+export { BACKEND_BASE_URL, API_BASE_URL };
+
