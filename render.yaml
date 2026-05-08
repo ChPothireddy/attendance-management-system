@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: attendance-management-system-server
+    env: python
+    region: oregon
+    plan: free
+    buildCommand: cd server && pip install -r requirements.txt
+    startCommand: cd server && python app.py
+    envVars:
+      - key: SECRET_KEY
+        scope: run
+      - key: DATABASE_URL
+        scope: run
+      - key: FLASK_ENV
+        value: production
