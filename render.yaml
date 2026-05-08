@@ -5,7 +5,7 @@ services:
     region: oregon
     plan: free
     buildCommand: pip install -r requirements.txt
-    startCommand: cd server && python app.py
+    startCommand: python server/app.py
     envVars:
       - key: SECRET_KEY
         scope: run
