@@ -4,7 +4,7 @@ services:
     env: python
     region: oregon
     plan: free
-    buildCommand: cd server && pip install -r requirements.txt
+    buildCommand: pip install -r requirements.txt
     startCommand: cd server && python app.py
     envVars:
       - key: SECRET_KEY
@@ -13,3 +13,5 @@ services:
         scope: run
       - key: FLASK_ENV
         value: production
+      - key: HOST
+        value: 0.0.0.0

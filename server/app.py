@@ -1,3 +1,4 @@
+import os
 from pathlib import Path
 
 from flask import Flask, send_from_directory
@@ -64,6 +65,10 @@ def create_app():
     def health():
         return {'status': 'ok', 'message': 'Attendance Management System API'}
 
+    @app.route('/')
+    def root():
+        return {'status': 'ok', 'message': 'Attendance Management System API'}
+
     @app.route('/api/uploads/<path:filename>')
     def uploaded_file(filename):
         return send_from_directory(uploads_dir, filename, as_attachment=False)
@@ -73,5 +78,7 @@ def create_app():
 if __name__ == "__main__":
     app = create_app()
     port = int(os.environ.get("PORT", 5000))  # Render sets PORT
-    app.run(host="0.0.0.0", port=port, debug=False)
+    host = os.environ.get("HOST", "0.0.0.0")  # Default to 0.0.0.0 for production
+    debug = os.environ.get("FLASK_ENV") != "production"
+    app.run(host=host, port=port, debug=debug)
 
