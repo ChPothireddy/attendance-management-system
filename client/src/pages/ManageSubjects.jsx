@@ -1,7 +1,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import API from '../api/axios';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlineTrash, HiArrowLeft } from 'react-icons/hi';
+import { HiOutlinePencil, HiOutlinePlus, HiOutlineTrash, HiOutlineUpload, HiArrowLeft } from 'react-icons/hi';
 
 export default function ManageSubjects() {
   const CUSTOM_TYPE_VALUE = '__custom__';
@@ -15,7 +15,11 @@ export default function ManageSubjects() {
   const [showSectionAssignModal, setShowSectionAssignModal] = useState(false);
   const [selectedSection, setSelectedSection] = useState(null);
   const [formatSubjects, setFormatSubjects] = useState([]);
-  const [subjectForm, setSubjectForm] = useState({ name: '', type: '', customType: '', credits: 1, periods: 1 });
+  const emptySubjectForm = { code: '', name: '', type: '', customType: '', credits: 1, periods: 1 };
+  const [subjectForm, setSubjectForm] = useState(emptySubjectForm);
+  const [editingSubject, setEditingSubject] = useState(null);
+  const [bulkSubjectFile, setBulkSubjectFile] = useState(null);
+  const [subjectFilters, setSubjectFilters] = useState({ type: '', program_id: '' });
   const [subjectTypeOptions, setSubjectTypeOptions] = useState(['Common', 'Elective', 'Open Elective']);
   const [formatSubjectType, setFormatSubjectType] = useState('');
   const [formatCustomType, setFormatCustomType] = useState('');
@@ -90,10 +94,15 @@ export default function ManageSubjects() {
   const resolvedFormatType = resolveSubjectType(formatSubjectType, formatCustomType);
 
   const sortedAllSubjects = useMemo(() => {
-    return [...subjects].sort((a, b) =>
-      (a.code || '').localeCompare(b.code || '', undefined, { numeric: true })
-    );
-  }, [subjects]);
+    return subjects
+      .filter((subject) => !subjectFilters.type || subject.subject_type === subjectFilters.type)
+      .filter((subject) => !subjectFilters.program_id || !subject.program_id || String(subject.program_id) === String(subjectFilters.program_id))
+      .sort((a, b) => (a.code || '').localeCompare(b.code || '', undefined, { numeric: true }));
+  }, [subjects, subjectFilters]);
+
+  const programOptions = useMemo(() => {
+    return Array.from(new Map(batchPrograms.map((bp) => [bp.program_id, bp])).values());
+  }, [batchPrograms]);
 
   const availableSubjectsByType = useMemo(() => {
     const grouped = {};
@@ -180,6 +189,36 @@ export default function ManageSubjects() {
     }
   };
 
+  const resetSubjectForm = () => {
+    setSubjectForm(emptySubjectForm);
+    setEditingSubject(null);
+  };
+
+  const openAddSubjectModal = () => {
+    resetSubjectForm();
+    setShowAllSubjectsModal(false);
+    setShowAddSubjectModal(true);
+  };
+
+  const openEditSubjectModal = (subject) => {
+    setEditingSubject(subject);
+    setSubjectForm({
+      code: subject.code || '',
+      name: subject.name || '',
+      type: subject.subject_type || '',
+      customType: '',
+      credits: subject.credits ?? 1,
+      periods: subject.periods ?? 1,
+    });
+    setShowAllSubjectsModal(false);
+    setShowAddSubjectModal(true);
+  };
+
+  const closeSubjectModal = () => {
+    setShowAddSubjectModal(false);
+    resetSubjectForm();
+  };
+
   const handleAddSubjectToDatabase = async (e) => {
     e.preventDefault();
     const resolvedType = resolveSubjectType(subjectForm.type, subjectForm.customType);
@@ -189,20 +228,63 @@ export default function ManageSubjects() {
     }
     try {
       const payload = {
+        code: subjectForm.code,
         name: subjectForm.name,
         subject_type: resolvedType,
         credits: parseFloat(subjectForm.credits),
         periods: parseInt(subjectForm.periods),
       };
       addTypeOption(resolvedType);
-      const res = await API.post('/department/subjects', payload);
-      toast.success(`Subject added: ${res.data.subject_code}`);
-      setShowAddSubjectModal(false);
-      setSubjectForm({ name: '', type: '', customType: '', credits: 1, periods: 1 });
+      if (editingSubject) {
+        await API.put(`/department/subjects/${editingSubject.code}`, payload);
+        toast.success('Subject updated');
+      } else {
+        const res = await API.post('/department/subjects', payload);
+        toast.success(`Subject added: ${res.data.subject_code}`);
+      }
+      closeSubjectModal();
       loadAllSubjects();
       loadSubjectTypes();
     } catch (err) {
-      toast.error(err.response?.data?.error || 'Failed to add subject');
+      toast.error(err.response?.data?.error || 'Failed to save subject');
+    }
+  };
+
+  const handleDeleteSubject = async (subject) => {
+    if (!window.confirm(`Delete ${subject.code} - ${subject.name}?`)) return;
+    try {
+      await API.delete(`/department/subjects/${subject.code}`);
+      toast.success('Subject deleted');
+      loadAllSubjects();
+      loadSubjectTypes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Failed to delete subject');
+    }
+  };
+
+  const handleBulkSubjectUpload = async () => {
+    if (!bulkSubjectFile) {
+      toast.error('Select a file first');
+      return;
+    }
+    const formData = new FormData();
+    formData.append('file', bulkSubjectFile);
+    try {
+      const res = await API.post('/department/subjects/bulk', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
+      toast.success(`Created ${res.data.created || 0}, updated ${res.data.updated || 0}`);
+      if (res.data.errors?.length) {
+        const firstErrors = res.data.errors
+          .slice(0, 3)
+          .map((item) => `Row ${item.row}: ${item.error}`)
+          .join('; ');
+        toast.error(`${res.data.errors.length} rows skipped. ${firstErrors}`, { duration: 8000 });
+        console.table(res.data.errors);
+      }
+      setBulkSubjectFile(null);
+      loadAllSubjects();
+      loadSubjectTypes();
+    } catch (err) {
+      toast.error(err.response?.data?.error || 'Bulk subject upload failed');
     }
   };
 
@@ -454,7 +536,7 @@ export default function ManageSubjects() {
         <div className="page-header">
           <h1>Subjects</h1>
           <div style={{ marginLeft: 'auto', display: 'flex', gap: '8px' }}>
-            <button className="btn btn-primary btn-sm" onClick={() => setShowAddSubjectModal(true)}>
+            <button className="btn btn-primary btn-sm" onClick={openAddSubjectModal}>
               <HiOutlinePlus /> Add Subject
             </button>
             <button className="btn btn-secondary btn-sm" onClick={() => setShowAllSubjectsModal(true)}>
@@ -504,10 +586,20 @@ export default function ManageSubjects() {
         </div>
 
         {showAddSubjectModal && (
-          <div className="modal-overlay" onClick={() => setShowAddSubjectModal(false)}>
+          <div className="modal-overlay" onClick={closeSubjectModal}>
             <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
-              <h2>Add Subject</h2>
+              <h2>{editingSubject ? 'Edit Subject' : 'Add Subject'}</h2>
               <form onSubmit={handleAddSubjectToDatabase}>
+                <div className="form-group">
+                  <label>Subject Code</label>
+                  <input
+                    className="form-control"
+                    value={subjectForm.code}
+                    onChange={(e) => setSubjectForm({ ...subjectForm, code: e.target.value.toUpperCase() })}
+                    placeholder="Leave blank to auto-generate"
+                    disabled={!!editingSubject}
+                  />
+                </div>
                 <div className="form-group">
                   <label>Subject Name</label>
                   <input
@@ -582,15 +674,12 @@ export default function ManageSubjects() {
                   <button
                     type="button"
                     className="btn btn-secondary"
-                    onClick={() => {
-                      setShowAddSubjectModal(false);
-                      setSubjectForm({ name: '', type: '', customType: '', credits: 1, periods: 1 });
-                    }}
+                    onClick={closeSubjectModal}
                   >
                     Cancel
                   </button>
                   <button type="submit" className="btn btn-primary">
-                    Add Subject
+                    {editingSubject ? 'Update Subject' : 'Add Subject'}
                   </button>
                 </div>
               </form>
@@ -600,21 +689,43 @@ export default function ManageSubjects() {
 
         {showAllSubjectsModal && (
           <div className="modal-overlay" onClick={() => setShowAllSubjectsModal(false)}>
-            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '900px', maxHeight: '80vh', overflowY: 'auto' }}>
-              <h2>All Subjects</h2>
-              <button
-                type="button"
-                className="btn btn-secondary btn-sm"
-                onClick={() => setShowAllSubjectsModal(false)}
-                style={{ position: 'absolute', right: '16px', top: '16px' }}
-              >
-                Close
-              </button>
+            <div className="modal" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '1100px', width: '94vw', maxHeight: '84vh', overflowY: 'auto' }}>
+              <div className="section-header">
+                <h2>All Subjects</h2>
+                <button type="button" className="btn btn-secondary btn-sm" onClick={() => setShowAllSubjectsModal(false)}>
+                  Close
+                </button>
+              </div>
+              <div className="toolbar" style={{ marginBottom: 16 }}>
+                <div className="toolbar-left">
+                  <button className="btn btn-primary btn-sm" type="button" onClick={openAddSubjectModal}>
+                    <HiOutlinePlus /> Add Subject
+                  </button>
+                  <select className="form-control" style={{ width: 180 }} value={subjectFilters.type} onChange={(e) => setSubjectFilters((old) => ({ ...old, type: e.target.value }))}>
+                    <option value="">All Types</option>
+                    {subjectTypeOptions.map((type) => (
+                      <option key={type} value={type}>{type}</option>
+                    ))}
+                  </select>
+                  <select className="form-control" style={{ width: 180 }} value={subjectFilters.program_id} onChange={(e) => setSubjectFilters((old) => ({ ...old, program_id: e.target.value }))}>
+                    <option value="">All Programs</option>
+                    {programOptions.map((program) => (
+                      <option key={program.program_id} value={program.program_id}>{program.program_name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+                  <input type="file" accept=".csv,.xlsx,.xls" onChange={(e) => setBulkSubjectFile(e.target.files?.[0] || null)} />
+                  <button className="btn btn-secondary btn-sm" type="button" onClick={handleBulkSubjectUpload} disabled={!bulkSubjectFile}>
+                    <HiOutlineUpload /> Bulk Upload
+                  </button>
+                </div>
+              </div>
               {sortedAllSubjects.length === 0 ? (
                 <p style={{ color: '#666' }}>No subjects available.</p>
               ) : (
                 <div className="data-table-wrapper">
-                  <table className="data-table">
+                  <table className="data-table" style={{ minWidth: 920 }}>
                     <thead>
                       <tr>
                         <th>Code</th>
@@ -622,6 +733,7 @@ export default function ManageSubjects() {
                         <th>Type</th>
                         <th>Credits</th>
                         <th>Periods</th>
+                        <th>Actions</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -632,6 +744,16 @@ export default function ManageSubjects() {
                           <td>{s.subject_type}</td>
                           <td>{s.credits ?? '-'}</td>
                           <td>{s.periods ?? '-'}</td>
+                          <td>
+                            <div style={{ display: 'flex', gap: 8 }}>
+                              <button className="btn btn-secondary btn-sm btn-icon" type="button" onClick={() => openEditSubjectModal(s)} title="Edit subject">
+                                <HiOutlinePencil />
+                              </button>
+                              <button className="btn btn-danger btn-sm btn-icon" type="button" onClick={() => handleDeleteSubject(s)} title="Delete subject">
+                                <HiOutlineTrash />
+                              </button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>

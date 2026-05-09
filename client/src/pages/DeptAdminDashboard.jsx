@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import API from '../api/axios';
-import { HiOutlineViewGrid, HiOutlineBookOpen, HiOutlineAcademicCap, HiOutlineUserGroup, HiOutlineCog, HiOutlineClipboardList } from 'react-icons/hi';
+import { HiOutlineViewGrid, HiOutlineBookOpen, HiOutlineAcademicCap, HiOutlineUserGroup, HiOutlineCog, HiOutlineClipboardList, HiOutlineDocumentText } from 'react-icons/hi';
 
 export default function DeptAdminDashboard() {
   const [stats, setStats] = useState({});
@@ -41,6 +41,7 @@ export default function DeptAdminDashboard() {
         <QuickAction title="Manage Faculty" desc="Add and manage faculty members" to="/manage-faculty" Icon={HiOutlineAcademicCap} color="var(--warning-500)" />
         <QuickAction title="Manage Students" desc="Add and manage students" to="/manage-students" Icon={HiOutlineUserGroup} color="var(--accent-600)" />
         <QuickAction title="Timetable" desc="Manage faculty allocations for sections" to="/allocations" Icon={HiOutlineCog} color="var(--gray-600)" />
+        <QuickAction title="Class Reports" desc="View and download class-wise reports" to="/class-reports" Icon={HiOutlineDocumentText} color="var(--primary-700)" />
       </div>
     </div>
   );

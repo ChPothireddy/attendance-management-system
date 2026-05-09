@@ -161,6 +161,56 @@ def build_pdf_document(page_stream, page_width=842, page_height=595):
     return bytes(pdf)
 
 
+def build_pdf_pages(page_streams, page_width=842, page_height=595):
+    pdf = bytearray(b'%PDF-1.4\n')
+    offsets = []
+    page_count = len(page_streams)
+    pages_object_id = 2
+    font_regular_id = 3
+    font_bold_id = 4
+    first_page_id = 5
+
+    def add_object(obj_id, content_bytes):
+        offsets.append((obj_id, len(pdf)))
+        pdf.extend(f'{obj_id} 0 obj\n'.encode('latin-1'))
+        pdf.extend(content_bytes)
+        pdf.extend(b'\nendobj\n')
+
+    add_object(1, b'<< /Type /Catalog /Pages 2 0 R >>')
+    page_refs = [f'{first_page_id + (index * 2)} 0 R' for index in range(page_count)]
+    add_object(pages_object_id, f'<< /Type /Pages /Count {page_count} /Kids [{" ".join(page_refs)}] >>'.encode('latin-1'))
+    add_object(font_regular_id, b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>')
+    add_object(font_bold_id, b'<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold >>')
+
+    for index, stream_text in enumerate(page_streams):
+        page_id = first_page_id + (index * 2)
+        content_id = page_id + 1
+        add_object(
+            page_id,
+            (
+                f'<< /Type /Page /Parent {pages_object_id} 0 R /MediaBox [0 0 {page_width} {page_height}] '
+                f'/Resources << /Font << /F1 {font_regular_id} 0 R /F2 {font_bold_id} 0 R >> >> /Contents {content_id} 0 R >>'
+            ).encode('latin-1')
+        )
+        stream = stream_text.encode('latin-1', errors='replace')
+        add_object(content_id, b'<< /Length ' + str(len(stream)).encode('latin-1') + b' >>\nstream\n' + stream + b'\nendstream')
+
+    object_count = max(obj_id for obj_id, _ in offsets)
+    offset_map = {obj_id: offset for obj_id, offset in offsets}
+    xref_offset = len(pdf)
+    pdf.extend(f'xref\n0 {object_count + 1}\n'.encode('latin-1'))
+    pdf.extend(b'0000000000 65535 f \n')
+    for obj_id in range(1, object_count + 1):
+        pdf.extend(f'{offset_map[obj_id]:010d} 00000 n \n'.encode('latin-1'))
+    pdf.extend(
+        (
+            f'trailer\n<< /Size {object_count + 1} /Root 1 0 R >>\n'
+            f'startxref\n{xref_offset}\n%%EOF'
+        ).encode('latin-1')
+    )
+    return bytes(pdf)
+
+
 def build_pdf_text(x, y, text, font='F1', size=10):
     escaped = escape_pdf_text(text)
     return f'0 g 0 G BT /{font} {size} Tf 1 0 0 1 {x:.2f} {y:.2f} Tm ({escaped}) Tj ET'
@@ -183,6 +233,34 @@ def build_pdf_rect(x, y, width, height, fill_gray=None, stroke_gray=0):
 def truncate_text(text, max_chars):
     value = str(text)
     return value if len(value) <= max_chars else value[:max_chars - 3] + '...'
+
+
+def number_to_words(value):
+    ones = [
+        'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+        'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+        'seventeen', 'eighteen', 'nineteen',
+    ]
+    tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']
+
+    def integer_words(number):
+        number = int(number)
+        if number < 20:
+            return ones[number]
+        if number < 100:
+            return tens[number // 10] if number % 10 == 0 else f'{tens[number // 10]} {ones[number % 10]}'
+        if number < 1000:
+            suffix = integer_words(number % 100) if number % 100 else ''
+            return f'{ones[number // 100]} hundred{f" {suffix}" if suffix else ""}'
+        return str(number)
+
+    numeric = float(value or 0)
+    if numeric.is_integer():
+        return integer_words(int(numeric)).title()
+    whole = int(numeric)
+    decimal = str(numeric).split('.', 1)[1].rstrip('0')
+    decimal_words = ' '.join(ones[int(digit)] for digit in decimal)
+    return f'{integer_words(whole)} point {decimal_words}'.title()
 
 
 def build_timetable_pdf(section, entries):
@@ -788,9 +866,12 @@ def create_section(current_user):
     if not program:
         return jsonify({'error': 'Invalid program associated with selected batch'}), 400
 
+    existing_batch_section = Section.query.filter_by(batch_id=batch.batch_id, dept_id=current_user.dept_id).first()
+    section_semester = existing_batch_section.current_semester if existing_batch_section else data.get('current_semester', 1)
+
     section = Section(
         section_name=data['name'],
-        current_semester=data.get('current_semester', 1),
+        current_semester=section_semester,
         batch_id=data['batch_id'],
         dept_id=current_user.dept_id,
         program_id=batch.program_id,
@@ -989,22 +1070,12 @@ def create_subject(current_user):
     if not normalized_type:
         return jsonify({'error': 'subject_type is required'}), 400
 
-    semester = None
-    batch_id = int(data.get('batch_id')) if data.get('batch_id') else None
-    program_id = int(data.get('program_id')) if data.get('program_id') else None
-    if batch_id:
-        active_sem = Semester.query.filter_by(batch_id=batch_id, is_active=True).first()
-        semester = active_sem.semester_no if active_sem else 1
-    if semester is None:
-        dept_batch_ids = [row[0] for row in db.session.query(Batch.batch_id).filter_by(dept_id=current_user.dept_id).all()]
-        if dept_batch_ids:
-            dept_active = Semester.query.filter(
-                Semester.batch_id.in_(dept_batch_ids),
-                Semester.is_active.is_(True)
-            ).order_by(Semester.batch_id.asc()).first()
-            semester = dept_active.semester_no if dept_active else 1
-    if semester is None:
-        semester = 1
+    dept_batch_ids = [row[0] for row in db.session.query(Batch.batch_id).filter_by(dept_id=current_user.dept_id).all()]
+    dept_active = Semester.query.filter(
+        Semester.batch_id.in_(dept_batch_ids),
+        Semester.is_active.is_(True)
+    ).order_by(Semester.batch_id.asc()).first() if dept_batch_ids else None
+    semester = dept_active.semester_no if dept_active else 1
 
     provided_code = (data.get('code') or '').strip().upper()
     if provided_code:
@@ -1023,12 +1094,150 @@ def create_subject(current_user):
         periods=int(data['periods']),
         subject_type=normalized_type,
         dept_id=current_user.dept_id,
-        batch_id=batch_id,
-        program_id=program_id,
+        batch_id=None,
+        program_id=None,
     )
     db.session.add(subject)
     db.session.commit()
     return jsonify({'subject_code': subject.subject_code, 'subject_name': subject.subject_name, 'semester': subject.semester, 'credits': subject.credits, 'subject_type': subject.subject_type}), 201
+
+
+def clean_subject_cell(value, default=''):
+    if value is None:
+        return default
+    return str(value).strip()
+
+
+def normalize_bulk_header(value):
+    return re.sub(r'[^a-z0-9]+', '_', clean_subject_cell(value).lower()).strip('_')
+
+
+def get_bulk_value(row, *keys):
+    normalized = {normalize_bulk_header(key): value for key, value in row.items()}
+    for key in keys:
+        normalized_key = normalize_bulk_header(key)
+        if normalized_key in normalized:
+            return normalized[normalized_key]
+    return None
+
+
+def apply_subject_values(subject, data, current_user):
+    normalized_type = normalize_subject_type(data.get('subject_type'))
+    if not normalized_type:
+        raise ValueError('subject_type is required')
+    subject.subject_name = clean_subject_cell(data.get('name'))
+    subject.subject_type = normalized_type
+    subject.credits = float(data.get('credits') or 0)
+    subject.periods = int(data.get('periods') or 1)
+    subject.batch_id = None
+    subject.program_id = None
+
+
+@dept_bp.route('/subjects/<subject_code>', methods=['PUT'])
+@token_required
+@role_required('DEPT_ADMIN')
+def update_subject(current_user, subject_code):
+    subject = db.session.get(Subject, subject_code.upper())
+    if not subject or subject.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Subject not found'}), 404
+    data = request.get_json() or {}
+    if not data.get('name') or not data.get('subject_type'):
+        return jsonify({'error': 'name and subject_type are required'}), 400
+    try:
+        apply_subject_values(subject, data, current_user)
+        db.session.commit()
+    except ValueError as exc:
+        db.session.rollback()
+        return jsonify({'error': str(exc)}), 400
+    return jsonify({'message': 'Subject updated'})
+
+
+@dept_bp.route('/subjects/bulk', methods=['POST'])
+@token_required
+@role_required('DEPT_ADMIN')
+def bulk_upload_subjects(current_user):
+    upload_file = request.files.get('file')
+    if not upload_file:
+        return jsonify({'error': 'file is required'}), 400
+
+    filename = upload_file.filename.lower()
+    if not filename.endswith(('.csv', '.xlsx', '.xls')):
+        return jsonify({'error': 'Only CSV/XLSX files are supported'}), 400
+
+    rows = []
+    if filename.endswith('.csv'):
+        import csv
+        try:
+            decoded = upload_file.stream.read().decode('utf-8', errors='replace')
+            rows.extend(csv.DictReader(decoded.splitlines()))
+        except Exception as exc:
+            return jsonify({'error': f'CSV parse error: {exc}'}), 400
+    else:
+        try:
+            from openpyxl import load_workbook
+        except ImportError:
+            return jsonify({'error': 'openpyxl is required for Excel upload'}), 500
+        try:
+            wb = load_workbook(upload_file, data_only=True)
+            sheet = wb.active
+            headers = [normalize_bulk_header(cell.value) for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+            for row in sheet.iter_rows(min_row=2, values_only=True):
+                rows.append({headers[i]: row[i] for i in range(len(headers)) if headers[i]})
+        except Exception as exc:
+            return jsonify({'error': f'Excel parse error: {exc}'}), 400
+
+    created = 0
+    updated = 0
+    errors = []
+    for idx, row in enumerate(rows, start=1):
+        try:
+            if not any(clean_subject_cell(value) for value in row.values()):
+                continue
+            data = {
+                'code': clean_subject_cell(get_bulk_value(row, 'code', 'subject_code', 'subject code')).upper(),
+                'name': clean_subject_cell(get_bulk_value(row, 'name', 'subject_name', 'subject name')),
+                'subject_type': clean_subject_cell(get_bulk_value(row, 'subject_type', 'type', 'subject type'), 'Common'),
+                'credits': get_bulk_value(row, 'credits', 'credit') or 1,
+                'periods': get_bulk_value(row, 'periods', 'period', 'classes', 'no of classes') or 1,
+            }
+            if not data['name']:
+                errors.append({'row': idx, 'error': 'Missing subject name'})
+                continue
+
+            subject = db.session.get(Subject, data['code']) if data['code'] else None
+            if subject:
+                if subject.dept_id != current_user.dept_id:
+                    errors.append({'row': idx, 'error': 'Subject code belongs to another department'})
+                    continue
+                apply_subject_values(subject, data, current_user)
+                updated += 1
+                continue
+
+            code = data['code']
+            if code and db.session.get(Subject, code):
+                errors.append({'row': idx, 'error': 'Subject code already exists'})
+                continue
+            if not code:
+                semester = 1
+                dept_batch_ids = [row[0] for row in db.session.query(Batch.batch_id).filter_by(dept_id=current_user.dept_id).all()]
+                active_sem = Semester.query.filter(
+                    Semester.batch_id.in_(dept_batch_ids),
+                    Semester.is_active.is_(True)
+                ).order_by(Semester.batch_id.asc()).first() if dept_batch_ids else None
+                semester = active_sem.semester_no if active_sem else 1
+                department = db.session.get(Department, current_user.dept_id)
+                code = generate_subject_code_for_dept(department.dept_name if department else '', semester)
+
+            subject = Subject(subject_code=code, dept_id=current_user.dept_id)
+            apply_subject_values(subject, data, current_user)
+            db.session.add(subject)
+            created += 1
+        except Exception as exc:
+            db.session.rollback()
+            errors.append({'row': idx, 'error': str(exc)})
+
+    db.session.commit()
+    return jsonify({'created': created, 'updated': updated, 'errors': errors})
 
 @dept_bp.route('/subjects/<subject_code>', methods=['DELETE'])
 @token_required
@@ -1746,6 +1955,241 @@ def download_section_timetable(current_user, section_id):
     response.headers['Content-Disposition'] = f'attachment; filename=section_{section.section_name}_{section.batch_id}_timetable.pdf'
     return response
 
+
+def calculate_subject_total(marks_by_exam):
+    mid1 = marks_by_exam.get('mid1', 0)
+    mid2 = marks_by_exam.get('mid2', 0)
+    assignment1 = marks_by_exam.get('assignment1', 0)
+    assignment2 = marks_by_exam.get('assignment2', 0)
+    return round(min(max(mid1, mid2), 20) + min(assignment1 + assignment2, 10), 2)
+
+
+def get_class_report_payload(current_user, section_id, report_type):
+    section = db.session.get(Section, section_id)
+    if not section or section.dept_id != current_user.dept_id:
+        raise ValueError('Section not found')
+    if report_type not in ('attendance', 'marks'):
+        raise ValueError('Invalid report type')
+
+    batch = db.session.get(Batch, section.batch_id)
+    subjects = get_section_semester_subjects(current_user.dept_id, section)
+    subject_codes = [subject.subject_code for subject in subjects]
+    students = Student.query.filter_by(section_id=section.section_id).order_by(Student.roll_no.asc()).all()
+
+    payload = {
+        'report_type': report_type,
+        'section': {
+            'id': section.section_id,
+            'name': section.section_name,
+            'batch_name': batch.batch_name if batch else None,
+            'semester': section.current_semester,
+        },
+        'subjects': [
+            {
+                'code': subject.subject_code,
+                'name': subject.subject_name,
+            }
+            for subject in subjects
+        ],
+        'rows': [],
+    }
+
+    if report_type == 'attendance':
+        sessions = AttendanceSession.query.filter(
+            AttendanceSession.section_id == section.section_id,
+            AttendanceSession.subject_code.in_(subject_codes) if subject_codes else False,
+        ).all()
+        session_map = {session.session_id: session for session in sessions}
+        session_ids = list(session_map.keys())
+        total_by_subject = Counter(session.subject_code for session in sessions)
+        records = AttendanceRecord.query.filter(AttendanceRecord.session_id.in_(session_ids)).all() if session_ids else []
+        present_by_student_subject = Counter()
+        for record in records:
+            session = session_map.get(record.session_id)
+            if session and record.status == 'P':
+                present_by_student_subject[(record.student_id, session.subject_code)] += 1
+
+        total_classes = sum(total_by_subject.values())
+        for student in students:
+            user = db.session.get(User, student.student_id)
+            subject_values = {}
+            attended_total = 0
+            for code in subject_codes:
+                present = present_by_student_subject[(student.student_id, code)]
+                conducted = total_by_subject[code]
+                attended_total += present
+                subject_values[code] = {
+                    'present': present,
+                    'total': conducted,
+                    'display': f'{present}/{conducted}',
+                }
+            percentage = round((attended_total / total_classes) * 100, 1) if total_classes else 0
+            payload['rows'].append({
+                'student_id': student.student_id,
+                'roll_no': student.roll_no,
+                'student_name': user.name if user else student.roll_no,
+                'subjects': subject_values,
+                'total_attended': attended_total,
+                'total_classes': total_classes,
+                'percentage': percentage,
+            })
+        return payload
+
+    marks = Mark.query.filter(
+        Mark.subject_code.in_(subject_codes) if subject_codes else False,
+        Mark.student_id.in_([student.student_id for student in students]) if students else False,
+    ).all()
+    marks_by_student_subject = defaultdict(dict)
+    for mark in marks:
+        marks_by_student_subject[(mark.student_id, mark.subject_code)][mark.exam_type] = mark.obtained_marks
+
+    for student in students:
+        user = db.session.get(User, student.student_id)
+        subject_values = {}
+        for code in subject_codes:
+            subject_total = calculate_subject_total(marks_by_student_subject[(student.student_id, code)])
+            subject_values[code] = {
+                'total': subject_total,
+                'display': f'{subject_total}/30',
+                'words': number_to_words(subject_total),
+            }
+        payload['rows'].append({
+            'student_id': student.student_id,
+            'roll_no': student.roll_no,
+            'student_name': user.name if user else student.roll_no,
+            'subjects': subject_values,
+        })
+    return payload
+
+
+def class_report_headers(payload):
+    base_headers = ['Roll No', 'Student Name']
+    subject_headers = [subject['code'] for subject in payload['subjects']]
+    if payload['report_type'] == 'attendance':
+        return base_headers + subject_headers + ['Percentage']
+    return base_headers + subject_headers
+
+
+def class_report_row_values(payload, row):
+    values = [row['roll_no'], row['student_name']]
+    for subject in payload['subjects']:
+        values.append(row['subjects'].get(subject['code'], {}).get('display', '0/0' if payload['report_type'] == 'attendance' else '0/30'))
+    if payload['report_type'] == 'attendance':
+        values.append(f"{row['percentage']}%")
+    return values
+
+
+def build_class_report_pdf(payload):
+    page_width = 842
+    page_height = 595
+    margin = 28
+    title = 'Class Attendance Report' if payload['report_type'] == 'attendance' else 'Class Marks Report'
+    section = payload['section']
+    subtitle = f"Section {section['name']} - {section.get('batch_name') or '-'} - Sem {section.get('semester') or '-'}"
+    headers = class_report_headers(payload)
+    rows = [class_report_row_values(payload, row) for row in payload['rows']]
+    rows_per_page = 22
+    pages = []
+    subject_count = max(1, len(headers) - 3 if payload['report_type'] == 'attendance' else len(headers) - 2)
+
+    fixed_width = 178 if payload['report_type'] == 'attendance' else 190
+    percent_width = 62 if payload['report_type'] == 'attendance' else 0
+    subject_width = max(45, (page_width - (margin * 2) - fixed_width - percent_width) / subject_count)
+    widths = [62, fixed_width - 62] + [subject_width] * (len(payload['subjects']))
+    if payload['report_type'] == 'attendance':
+        widths.append(percent_width)
+
+    for page_index in range(0, max(1, len(rows)), rows_per_page):
+        page_rows = rows[page_index:page_index + rows_per_page]
+        commands = [
+            build_pdf_text(margin, page_height - 34, title, font='F2', size=13),
+            build_pdf_text(margin, page_height - 52, subtitle, size=9),
+        ]
+        y = page_height - 82
+        x = margin
+        header_height = 24
+        for header, width in zip(headers, widths):
+            commands.append(build_pdf_rect(x, y - header_height, width, header_height, fill_gray=0.86))
+            commands.append(build_pdf_text(x + 4, y - 15, truncate_text(header, max(6, int(width / 5))), font='F2', size=7))
+            x += width
+
+        row_height = 19
+        y -= header_height
+        for row_values in page_rows:
+            x = margin
+            y -= row_height
+            for value, width in zip(row_values, widths):
+                commands.append(build_pdf_rect(x, y, width, row_height, stroke_gray=0.45))
+                commands.append(build_pdf_text(x + 4, y + 7, truncate_text(value, max(6, int(width / 5))), size=7))
+                x += width
+        commands.append(build_pdf_text(page_width - 92, margin - 2, f'Page {len(pages) + 1}', size=8))
+        pages.append('\n'.join(commands))
+
+    return build_pdf_pages(pages, page_width=page_width, page_height=page_height)
+
+
+def build_class_report_xlsx(payload):
+    try:
+        from openpyxl import Workbook
+    except ImportError as exc:
+        raise RuntimeError('openpyxl is required for XLSX export') from exc
+
+    wb = Workbook()
+    ws = wb.active
+    ws.title = 'Attendance' if payload['report_type'] == 'attendance' else 'Marks'
+    ws.append(class_report_headers(payload))
+    for row in payload['rows']:
+        ws.append(class_report_row_values(payload, row))
+    for column_cells in ws.columns:
+        max_length = max(len(str(cell.value or '')) for cell in column_cells)
+        ws.column_dimensions[column_cells[0].column_letter].width = min(max(max_length + 2, 12), 28)
+
+    output = io.BytesIO()
+    wb.save(output)
+    output.seek(0)
+    return output.getvalue()
+
+
+@dept_bp.route('/class-reports/<int:section_id>/<report_type>', methods=['GET'])
+@token_required
+@role_required('DEPT_ADMIN')
+def get_class_report(current_user, section_id, report_type):
+    try:
+        return jsonify(get_class_report_payload(current_user, section_id, report_type))
+    except ValueError as exc:
+        message = str(exc)
+        return jsonify({'error': message}), 404 if 'not found' in message.lower() else 400
+
+
+@dept_bp.route('/class-reports/<int:section_id>/<report_type>/download', methods=['GET'])
+@token_required
+@role_required('DEPT_ADMIN')
+def download_class_report(current_user, section_id, report_type):
+    file_format = (request.args.get('format') or 'pdf').lower()
+    try:
+        payload = get_class_report_payload(current_user, section_id, report_type)
+    except ValueError as exc:
+        message = str(exc)
+        return jsonify({'error': message}), 404 if 'not found' in message.lower() else 400
+
+    section = payload['section']
+    filename_base = f"class-{section['name']}-{payload['report_type']}-report".replace(' ', '-').lower()
+    if file_format == 'pdf':
+        response = make_response(build_class_report_pdf(payload))
+        response.headers['Content-Type'] = 'application/pdf'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename_base}.pdf'
+        return response
+    if file_format == 'xlsx':
+        try:
+            file_bytes = build_class_report_xlsx(payload)
+        except RuntimeError as exc:
+            return jsonify({'error': str(exc)}), 500
+        response = make_response(file_bytes)
+        response.headers['Content-Type'] = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        response.headers['Content-Disposition'] = f'attachment; filename={filename_base}.xlsx'
+        return response
+    return jsonify({'error': 'format must be pdf or xlsx'}), 400
+
 @dept_bp.route('/sections/<int:section_id>/faculty', methods=['GET'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1971,6 +2415,138 @@ def update_student(current_user, student_id):
     db.session.commit()
     return jsonify({'message': 'Student updated successfully'})
 
+
+def parse_semester_value(value):
+    if value is None or value == '':
+        return 1
+    text = str(value).strip().upper()
+    if text.isdigit():
+        return int(text)
+    semester_match = re.search(r'(\d+)(?:ST|ND|RD|TH)?\s+SEMESTER', text)
+    if semester_match:
+        return int(semester_match.group(1))
+    year_sem_match = re.match(r'^\s*(\d+)\s*-\s*(\d+)', text)
+    if year_sem_match:
+        year_no = int(year_sem_match.group(1))
+        sem_in_year = int(year_sem_match.group(2))
+        return ((year_no - 1) * 2) + sem_in_year
+    roman_values = {'I': 1, 'II': 2, 'III': 3, 'IV': 4, 'V': 5, 'VI': 6, 'VII': 7, 'VIII': 8}
+    return roman_values.get(text, 1)
+
+
+def parse_batch_year_span(batch_name):
+    match = re.match(r'^\s*(?P<start>\d{4})\s*-\s*(?P<end>\d{2}|\d{4})\s*$', str(batch_name or '').strip())
+    if not match:
+        return None
+    start_year = int(match.group('start'))
+    end_part = match.group('end')
+    end_year = int(end_part) if len(end_part) == 4 else int(str(start_year)[:2] + end_part)
+    return end_year - start_year
+
+
+def create_bulk_batch_if_possible(current_user, batch_name, current_semester):
+    dept_batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
+    program_ids = {batch.program_id for batch in dept_batches if batch.program_id}
+    if len(program_ids) != 1:
+        raise ValueError(f'Batch {batch_name} not found')
+
+    program = db.session.get(Program, next(iter(program_ids)))
+    year_span = parse_batch_year_span(batch_name)
+    expected_span = (program.duration_semesters // 2) if program else None
+    if not year_span or not expected_span or year_span != expected_span:
+        raise ValueError(f'Batch {batch_name} not found')
+
+    batch = Batch(batch_name=batch_name, dept_id=current_user.dept_id, program_id=program.program_id)
+    db.session.add(batch)
+    db.session.flush()
+    for semester_no in range(1, program.duration_semesters + 1):
+        db.session.add(Semester(
+            batch_id=batch.batch_id,
+            semester_no=semester_no,
+            is_active=(semester_no == current_semester),
+        ))
+    return batch
+
+
+def resolve_bulk_student_target(current_user, row):
+    batch_id = row.get('batch_id')
+    section_id = row.get('section_id')
+    batch_name = (str(row.get('batch_name') or '').strip())
+    section_name = (str(row.get('section_name') or row.get('class_name') or '').strip())
+    current_semester = parse_semester_value(row.get('current_semester') or row.get('semester') or row.get('semester_text'))
+
+    batch = None
+    if batch_id not in (None, ''):
+        batch = db.session.get(Batch, int(batch_id))
+    elif batch_name:
+        batch = Batch.query.filter_by(batch_name=batch_name, dept_id=current_user.dept_id).first()
+        if not batch:
+            batch = create_bulk_batch_if_possible(current_user, batch_name, current_semester)
+    else:
+        dept_batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
+        if len(dept_batches) == 1:
+            batch = dept_batches[0]
+
+    if not batch or batch.dept_id != current_user.dept_id:
+        raise ValueError('Invalid or missing batch')
+
+    section = None
+    if section_id not in (None, ''):
+        section = db.session.get(Section, int(section_id))
+    elif section_name:
+        section = Section.query.filter_by(
+            section_name=section_name,
+            batch_id=batch.batch_id,
+            dept_id=current_user.dept_id,
+        ).first()
+        if not section:
+            section = Section(
+                section_name=section_name,
+                current_semester=current_semester,
+                batch_id=batch.batch_id,
+                dept_id=current_user.dept_id,
+                program_id=batch.program_id,
+            )
+            db.session.add(section)
+            db.session.flush()
+
+    if not section or section.dept_id != current_user.dept_id or section.batch_id != batch.batch_id:
+        raise ValueError('Invalid or missing section')
+
+    return batch, section
+
+
+def clean_bulk_cell(value, default=''):
+    if value is None:
+        return default
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    text = str(value).strip()
+    return text if text else default
+
+
+def parse_bulk_rows(upload_file, filename):
+    rows = []
+    if filename.endswith('.csv'):
+        import csv
+        decoded = upload_file.stream.read().decode('utf-8', errors='replace')
+        reader = csv.DictReader(decoded.splitlines())
+        for row in reader:
+            rows.append({normalize_bulk_header(key): value for key, value in row.items() if key})
+        return rows
+
+    from openpyxl import load_workbook
+    wb = load_workbook(upload_file, data_only=True)
+    sheet = wb.active
+    raw_headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
+    headers = [normalize_bulk_header(header) for header in raw_headers]
+    for row in sheet.iter_rows(min_row=2, values_only=True):
+        row_data = {headers[i]: row[i] for i in range(len(headers)) if headers[i]}
+        if any(value not in (None, '') for value in row_data.values()):
+            rows.append(row_data)
+    return rows
+
+
 @dept_bp.route('/students/bulk', methods=['POST'])
 @token_required
 @role_required('DEPT_ADMIN')
@@ -1984,60 +2560,50 @@ def bulk_upload_students(current_user):
     if not any(filename.endswith(ext) for ext in supported):
         return jsonify({'error': 'Only CSV/XLSX files are supported'}), 400
 
-    rows = []
-    if filename.endswith('.csv'):
-        import csv
-        try:
-            decoded = csv_file.stream.read().decode('utf-8', errors='replace')
-            reader = csv.DictReader(decoded.splitlines())
-            for row in reader:
-                rows.append(row)
-        except Exception as exc:
+    try:
+        if filename.endswith('.csv'):
+            rows = parse_bulk_rows(csv_file, filename)
+        else:
+            rows = parse_bulk_rows(csv_file, filename)
+    except ImportError:
+        return jsonify({'error': 'openpyxl is required for Excel upload'}), 500
+    except Exception as exc:
+        if filename.endswith('.csv'):
             return jsonify({'error': f'CSV parse error: {exc}'}), 400
-    else:
-        try:
-            from openpyxl import load_workbook
-        except ImportError:
-            return jsonify({'error': 'openpyxl is required for Excel upload'}), 500
-        try:
-            wb = load_workbook(csv_file, data_only=True)
-            sheet = wb.active
-            headers = [cell.value for cell in next(sheet.iter_rows(min_row=1, max_row=1))]
-            for row in sheet.iter_rows(min_row=2, values_only=True):
-                rows.append({headers[i]: row[i] for i in range(len(headers)) if headers[i]})
-        except Exception as exc:
-            return jsonify({'error': f'Excel parse error: {exc}'}), 400
+        return jsonify({'error': f'Excel parse error: {exc}'}), 400
 
     created = 0
     errors = []
     for idx, row in enumerate(rows, start=1):
         try:
+            name = get_bulk_value(row, 'name', 'student_name', 'student name')
+            email = get_bulk_value(row, 'email', 'student_email', 'student email')
+            roll_no = get_bulk_value(row, 'roll_no', 'roll no', 'roll', 'roll number', 'enrollment_no', 'enrollment no')
             data = {
-                'name': str(row.get('name', '')).strip(),
-                'email': str(row.get('email', '')).strip(),
-                'password': str(row.get('password', 'defaultPassword')).strip(),
-                'roll_no': str(row.get('roll_no', '')).strip(),
-                'batch_id': row.get('batch_id'),
-                'section_id': row.get('section_id'),
-                'student_type': str(row.get('student_type', 'Regular')).strip(),
-                'passport_number': str(row.get('passport_number', '')).strip(),
-                'category': str(row.get('category', '')).strip(),
-                'entrance_marks': row.get('entrance_marks') or 0,
-                'phone': str(row.get('phone', '')).strip(),
+                'name': clean_bulk_cell(name),
+                'email': clean_bulk_cell(email),
+                'password': clean_bulk_cell(get_bulk_value(row, 'password'), 'Student@123'),
+                'roll_no': clean_bulk_cell(roll_no),
+                'batch_id': get_bulk_value(row, 'batch_id', 'batch id'),
+                'section_id': get_bulk_value(row, 'section_id', 'section id'),
+                'batch_name': get_bulk_value(row, 'batch_name', 'batch name', 'batch'),
+                'section_name': get_bulk_value(row, 'section_name', 'section name', 'section', 'class_name', 'class name'),
+                'current_semester': get_bulk_value(row, 'current_semester', 'current semester', 'semester', 'semester_text', 'semester text'),
+                'student_type': clean_bulk_cell(get_bulk_value(row, 'student_type', 'student type', 'type'), 'Regular'),
+                'passport_number': clean_bulk_cell(get_bulk_value(row, 'passport_number', 'passport number', 'passport')),
+                'category': clean_bulk_cell(get_bulk_value(row, 'category')),
+                'entrance_marks': get_bulk_value(row, 'entrance_marks', 'entrance marks') or 0,
+                'phone': clean_bulk_cell(get_bulk_value(row, 'phone', 'mobile', 'phone number', 'mobile number')),
             }
 
-            if not data['name'] or not data['email'] or not data['roll_no'] or not data['batch_id'] or not data['section_id']:
+            if not data['name'] or not data['email'] or not data['roll_no']:
                 errors.append({'row': idx, 'error': 'Missing required fields'})
                 continue
 
-            data['batch_id'] = int(data['batch_id'])
-            data['section_id'] = int(data['section_id'])
-
-            # Reuse create_student logic by direct insertion to avoid nested request call
-            batch = db.session.get(Batch, data['batch_id'])
-            section = db.session.get(Section, data['section_id'])
-            if not batch or batch.dept_id != current_user.dept_id or not section or section.dept_id != current_user.dept_id or section.batch_id != batch.batch_id:
-                errors.append({'row': idx, 'error': 'Invalid batch or section'});
+            try:
+                batch, section = resolve_bulk_student_target(current_user, data)
+            except ValueError as exc:
+                errors.append({'row': idx, 'error': str(exc)})
                 continue
 
             email = normalize_email(data['email'])
@@ -2051,8 +2617,8 @@ def bulk_upload_students(current_user):
             student = Student(
                 student_id=user.user_id,
                 roll_no=data['roll_no'].upper(),
-                batch_id=data['batch_id'],
-                section_id=data['section_id'],
+                batch_id=batch.batch_id,
+                section_id=section.section_id,
                 dept_id=current_user.dept_id,
                 email=email,
                 phone=data['phone'],

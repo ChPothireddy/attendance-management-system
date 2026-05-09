@@ -362,7 +362,7 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
           <div className="data-table-wrapper">
-            <table className="data-table">
+            <table className="data-table super-admin-data-table">
               <thead>
                 <tr>
                   <th>Roll No</th>
@@ -428,7 +428,7 @@ export default function SuperAdminDashboard() {
             </div>
           </div>
           <div className="data-table-wrapper">
-            <table className="data-table">
+            <table className="data-table super-admin-data-table">
               <thead>
                 <tr>
                   <th>Faculty ID</th>

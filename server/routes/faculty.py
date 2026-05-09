@@ -51,6 +51,35 @@ def save_uploaded_file(file_storage, folder_name):
     return str(relative_path).replace('\\', '/'), original_name
 
 
+def number_to_words(value):
+    ones = [
+        'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight', 'nine',
+        'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen', 'sixteen',
+        'seventeen', 'eighteen', 'nineteen',
+    ]
+    tens = ['', '', 'twenty', 'thirty', 'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety']
+
+    def integer_words(number):
+        number = int(number)
+        if number < 20:
+            return ones[number]
+        if number < 100:
+            return tens[number // 10] if number % 10 == 0 else f'{tens[number // 10]} {ones[number % 10]}'
+        if number < 1000:
+            suffix = integer_words(number % 100) if number % 100 else ''
+            return f'{ones[number // 100]} hundred{f" {suffix}" if suffix else ""}'
+        return str(number)
+
+    numeric = float(value or 0)
+    if numeric.is_integer():
+        return integer_words(int(numeric)).title()
+
+    whole = int(numeric)
+    decimal = str(numeric).split('.', 1)[1].rstrip('0')
+    decimal_words = ' '.join(ones[int(digit)] for digit in decimal)
+    return f'{integer_words(whole)} point {decimal_words}'.title()
+
+
 def get_allocation_context(current_user, section_id=None, subject_code=None):
     faculty = get_faculty_profile(current_user)
     if not faculty:
@@ -317,6 +346,8 @@ def attendance_report(current_user):
     sessions = AttendanceSession.query.filter_by(section_id=section_id, subject_code=subject_code).all()
     session_ids = [session.session_id for session in sessions]
     records = AttendanceRecord.query.filter(AttendanceRecord.session_id.in_(session_ids)).all() if session_ids else []
+    subject = db.session.get(Subject, subject_code)
+    required_classes = subject.periods if subject and subject.periods is not None else 0
 
     records_by_student = {}
     for record in records:
@@ -326,7 +357,7 @@ def attendance_report(current_user):
     for student in students:
         user = db.session.get(User, student.student_id)
         student_records = records_by_student.get(student.student_id, [])
-        total = len(student_records)
+        total = len(sessions)
         present = sum(1 for record in student_records if record.status == 'P')
         absent = total - present
         percentage = round((present / total) * 100, 1) if total else 0
@@ -335,6 +366,7 @@ def attendance_report(current_user):
             'student_name': user.name if user else student.roll_no,
             'roll_no': student.roll_no,
             'enrollment_no': student.roll_no,
+            'required_classes': required_classes,
             'total_classes': total,
             'present': present,
             'late': 0,
@@ -441,8 +473,6 @@ def marks_report(current_user):
         user = db.session.get(User, student.student_id)
         student_marks = marks_by_student.get(student.student_id, [])
         marks_data = {}
-        total_obtained = 0
-        total_max = 0
         for mark in student_marks:
             percentage = round((mark.obtained_marks / mark.max_marks) * 100, 1) if mark.max_marks else 0
             marks_data[mark.exam_type] = {
@@ -451,8 +481,14 @@ def marks_report(current_user):
                 'percentage': percentage,
                 'remarks': mark.remarks,
             }
-            total_obtained += mark.obtained_marks
-            total_max += mark.max_marks
+
+        mid1 = marks_data.get('mid1', {}).get('obtained', 0)
+        mid2 = marks_data.get('mid2', {}).get('obtained', 0)
+        best_mid = min(max(mid1, mid2), 20)
+        assignment1 = marks_data.get('assignment1', {}).get('obtained', 0)
+        assignment2 = marks_data.get('assignment2', {}).get('obtained', 0)
+        continuous_assignment = min(assignment1 + assignment2, 10)
+        total_obtained = round(best_mid + continuous_assignment, 2)
 
         report.append({
             'student_id': student.student_id,
@@ -460,9 +496,16 @@ def marks_report(current_user):
             'roll_no': student.roll_no,
             'enrollment_no': student.roll_no,
             'marks': marks_data,
+            'mid1': mid1,
+            'mid2': mid2,
+            'best_mid': best_mid,
+            'assignment1': assignment1,
+            'assignment2': assignment2,
+            'continuous_assignment': continuous_assignment,
             'total_obtained': total_obtained,
-            'total_max': total_max,
-            'overall_percentage': round((total_obtained / total_max) * 100, 1) if total_max else 0,
+            'total_max': 30,
+            'total_words': number_to_words(total_obtained),
+            'overall_percentage': round((total_obtained / 30) * 100, 1),
         })
     return jsonify(report)
 

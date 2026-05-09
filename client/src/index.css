@@ -332,6 +332,17 @@ select.form-control {
   word-break: normal;
 }
 
+.super-admin-data-table {
+  width: max-content;
+  min-width: 920px;
+}
+
+.super-admin-data-table th,
+.super-admin-data-table td {
+  white-space: nowrap;
+  word-break: normal;
+}
+
 /* Responsive table styles */
 .responsive-table {
   min-width: 0;

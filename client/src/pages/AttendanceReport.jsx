@@ -38,16 +38,24 @@ export default function AttendanceReport() {
             <h2 style={{fontSize:'1.1rem',fontWeight:700,marginBottom:'16px'}}>Detailed Report</h2>
             <div className="data-table-wrapper">
               <table className="data-table">
-                <thead><tr><th>Enrollment</th><th>Name</th><th>Total</th><th>Present</th><th>Late</th><th>Absent</th><th>Percentage</th></tr></thead>
+                <thead>
+                  <tr>
+                    <th>Roll No</th>
+                    <th>Student Name</th>
+                    <th>No. of Classes Required</th>
+                    <th>Total Classes Conducted</th>
+                    <th>No. of Classes Attended</th>
+                    <th>Percentage</th>
+                  </tr>
+                </thead>
                 <tbody>
                   {report.map(r => (
                     <tr key={r.student_id}>
-                      <td><span className="badge badge-info">{r.enrollment_no}</span></td>
+                      <td><span className="badge badge-info">{r.roll_no || r.enrollment_no}</span></td>
                       <td style={{fontWeight:600}}>{r.student_name}</td>
+                      <td>{r.required_classes}</td>
                       <td>{r.total_classes}</td>
                       <td><span className="badge badge-present">{r.present}</span></td>
-                      <td><span className="badge badge-late">{r.late}</span></td>
-                      <td><span className="badge badge-absent">{r.absent}</span></td>
                       <td>
                         <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
                           <div className="percent-bar" style={{width:'60px'}}>

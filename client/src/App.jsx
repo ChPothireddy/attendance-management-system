@@ -14,6 +14,7 @@ import ManageSubjects from './pages/ManageSubjects';
 import ManageFaculty from './pages/ManageFaculty';
 import ManageStudents from './pages/ManageStudents';
 import ManageAllocations from './pages/ManageAllocations';
+import ClassReports from './pages/ClassReports';
 
 // Faculty pages
 import MarkAttendance from './pages/MarkAttendance';
@@ -49,6 +50,7 @@ function AppRoutes() {
         <Route path="/manage-faculty" element={<ProtectedRoute roles={['DEPT_ADMIN']}><ManageFaculty /></ProtectedRoute>} />
         <Route path="/manage-students" element={<ProtectedRoute roles={['DEPT_ADMIN']}><ManageStudents /></ProtectedRoute>} />
         <Route path="/allocations" element={<ProtectedRoute roles={['DEPT_ADMIN']}><ManageAllocations /></ProtectedRoute>} />
+        <Route path="/class-reports" element={<ProtectedRoute roles={['DEPT_ADMIN']}><ClassReports /></ProtectedRoute>} />
 
         {/* Faculty */}
         <Route path="/mark-attendance" element={<ProtectedRoute roles={['FACULTY']}><MarkAttendance /></ProtectedRoute>} />

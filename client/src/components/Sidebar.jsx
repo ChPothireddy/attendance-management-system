@@ -23,6 +23,7 @@ const navConfig = {
     { to: '/manage-faculty', label: 'Faculty', icon: HiOutlineAcademicCap },
     { to: '/manage-students', label: 'Students', icon: HiOutlineUserGroup },
     { to: '/allocations', label: 'Timetable', icon: HiOutlineCog },
+    { to: '/class-reports', label: 'Class Reports', icon: HiOutlineDocumentText },
   ],
   faculty: [
     { section: 'Overview' },

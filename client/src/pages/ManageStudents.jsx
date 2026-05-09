@@ -27,7 +27,7 @@ export default function ManageStudents() {
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [editingStudent, setEditingStudent] = useState(null);
-  const [filters, setFilters] = useState({ batch_id: '', program_id: '', semester: '', type: '', attendance_under_75: false });
+  const [filters, setFilters] = useState({ batch_program: '', section_id: '', type: '', attendance: '' });
   const [bulkFile, setBulkFile] = useState(null);
 
   useEffect(() => { load(); }, []);
@@ -124,8 +124,12 @@ export default function ManageStudents() {
       const res = await API.post('/department/students/bulk', formData, { headers: { 'Content-Type': 'multipart/form-data' } });
       toast.success(`Imported ${res.data.created} students`);
       if (res.data.errors && res.data.errors.length > 0) {
-        toast.error(`Errors: ${res.data.errors.length}. Check console.`);
-        console.error('bulk upload errors', res.data.errors);
+        const firstErrors = res.data.errors
+          .slice(0, 3)
+          .map((item) => `Row ${item.row}: ${item.error}`)
+          .join('; ');
+        toast.error(`${res.data.errors.length} rows skipped. ${firstErrors}`, { duration: 8000 });
+        console.table(res.data.errors);
       }
       setBulkFile(null);
       load();
@@ -147,12 +151,28 @@ export default function ManageStudents() {
     }
   };
 
+  const filteredSections = filters.batch_program
+    ? sections.filter((section) => {
+        const [batchId] = filters.batch_program.split(':');
+        return String(section.batch_id) === String(batchId);
+      })
+    : sections;
+
   const filteredStudents = students
-    .filter((student) => (!filters.batch_id || String(student.batch_id) === String(filters.batch_id)))
-    .filter((student) => (!filters.program_id || String(student.program_id) === String(filters.program_id)))
-    .filter((student) => (!filters.semester || String(student.section_current_semester || student.semester || '') === String(filters.semester)))
+    .filter((student) => {
+      if (!filters.batch_program) return true;
+      const [batchId, programId] = filters.batch_program.split(':');
+      return String(student.batch_id) === String(batchId) && String(student.program_id || '') === String(programId || '');
+    })
+    .filter((student) => (!filters.section_id || String(student.section_id) === String(filters.section_id)))
     .filter((student) => (!filters.type || String(student.student_type) === String(filters.type)))
-    .filter((student) => (!filters.attendance_under_75 || Number(student.attendance_pct) < 75));
+    .filter((student) => {
+      const pct = Number(student.attendance_pct || 0);
+      if (filters.attendance === 'lt65') return pct < 65;
+      if (filters.attendance === 'lt75') return pct < 75;
+      if (filters.attendance === 'gt75') return pct > 75;
+      return true;
+    });
 
   return (
     <div className="page-container">
@@ -161,26 +181,24 @@ export default function ManageStudents() {
       <div className="card" style={{ marginBottom: '16px' }}>
         <div className="section-header"><h2>Filters</h2></div>
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: '8px' }}>
-          <select className="form-control" value={filters.batch_id} onChange={(e) => updateFilter('batch_id', e.target.value)}>
-            <option value="">All Batches</option>
-            {batches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+          <select className="form-control" value={filters.batch_program} onChange={(e) => setFilters((old) => ({ ...old, batch_program: e.target.value, section_id: '' }))}>
+            <option value="">All Batch-Programs</option>
+            {batches.map((b) => <option key={b.id} value={`${b.id}:${b.program_id || ''}`}>{b.name}{b.program_name ? ` - ${b.program_name}` : ''}</option>)}
           </select>
-          <select className="form-control" value={filters.program_id} onChange={(e) => updateFilter('program_id', e.target.value)}>
-            <option value="">All Programs</option>
-            {programs.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-          <select className="form-control" value={filters.semester} onChange={(e) => updateFilter('semester', e.target.value)}>
-            <option value="">All Semesters</option>
-            {[1,2,3,4,5,6,7,8].map((n) => <option key={n} value={n}>Sem {n}</option>)}
+          <select className="form-control" value={filters.section_id} onChange={(e) => updateFilter('section_id', e.target.value)}>
+            <option value="">All Sections</option>
+            {filteredSections.map((section) => <option key={section.id} value={section.id}>{section.name} - {section.batch_name} (Sem {section.current_semester})</option>)}
           </select>
           <select className="form-control" value={filters.type} onChange={(e) => updateFilter('type', e.target.value)}>
             <option value="">All Types</option>
             {['Regular', 'Foreigner', 'NRI'].map((v) => <option key={v} value={v}>{v}</option>)}
           </select>
-          <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <input type="checkbox" checked={filters.attendance_under_75} onChange={(e) => updateFilter('attendance_under_75', e.target.checked)} />
-            {'Attendance < 75%'}
-          </label>
+          <select className="form-control" value={filters.attendance} onChange={(e) => updateFilter('attendance', e.target.value)}>
+            <option value="">All Attendance</option>
+            <option value="lt65">Attendance &lt; 65%</option>
+            <option value="lt75">Attendance &lt; 75%</option>
+            <option value="gt75">Attendance &gt; 75%</option>
+          </select>
         </div>
       </div>
 

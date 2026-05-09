@@ -10,15 +10,6 @@ import {
   HiOutlineX,
 } from 'react-icons/hi';
 
-const slotLabels = [
-  '09:00-09:50',
-  '09:50-10:40',
-  '10:40-11:30',
-  '11:30-12:20',
-  '01:30-02:20',
-  '02:20-03:10',
-];
-
 export default function ManageAllocations() {
   const [allocations, setAllocations] = useState([]);
   const [faculty, setFaculty] = useState([]);
@@ -63,6 +54,7 @@ export default function ManageAllocations() {
   }, [selectedSectionId]);
 
   const selectedSection = sections.find((section) => section.id === Number(selectedSectionId)) || null;
+  const timetableSlots = timetable.grid[0]?.slots || [];
 
   function getAllocatedFaculty(subjectCode) {
     if (!selectedSection) return [];
@@ -436,9 +428,9 @@ export default function ManageAllocations() {
                 <thead>
                   <tr>
                     <th>Day</th>
-                    {slotLabels.map((label, index) => (
-                      <th key={label}>
-                        P{index + 1}<br />{label}
+                    {timetableSlots.map((slot, index) => (
+                      <th key={slot.slot_index}>
+                        P{index + 1}<br />{slot.slot_label}
                       </th>
                     ))}
                   </tr>
