@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import toast from 'react-hot-toast';
-import { HiOutlinePlus, HiOutlineTrash, HiOutlineUpload } from 'react-icons/hi';
+import { HiOutlinePencil, HiOutlinePlus, HiOutlineTrash, HiOutlineUpload } from 'react-icons/hi';
 
 import API from '../api/axios';
 
@@ -10,6 +10,7 @@ const emptyForm = {
   password: '',
   roll_no: '',
   batch_id: '',
+  program_id: '',
   section_id: '',
   phone: '',
   student_type: 'Regular',
@@ -25,12 +26,16 @@ export default function ManageStudents() {
   const [sections, setSections] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [editingStudent, setEditingStudent] = useState(null);
   const [filters, setFilters] = useState({ batch_id: '', program_id: '', semester: '', type: '', attendance_under_75: false });
   const [bulkFile, setBulkFile] = useState(null);
 
   useEffect(() => { load(); }, []);
 
-  const resetForm = () => setForm({ ...emptyForm });
+  const resetForm = () => {
+    setForm({ ...emptyForm });
+    setEditingStudent(null);
+  };
 
   const load = async () => {
     try {
@@ -49,16 +54,50 @@ export default function ManageStudents() {
     }
   };
 
-  const handleCreate = async (e) => {
+  const openEditModal = (student) => {
+    setEditingStudent(student);
+    setForm({
+      name: student.name || '',
+      email: student.email || '',
+      password: '',
+      roll_no: student.roll_no || '',
+      batch_id: student.batch_id || '',
+      program_id: student.program_id || '',
+      section_id: student.section_id || '',
+      phone: student.phone || '',
+      student_type: student.student_type || 'Regular',
+      passport_number: student.passport_number || '',
+      category: student.category || '',
+      entrance_marks: student.entrance_marks || 0,
+    });
+    setShowModal(true);
+  };
+
+  const closeModal = () => {
+    setShowModal(false);
+    resetForm();
+  };
+
+  const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await API.post('/department/students', {
+      const payload = {
         ...form,
         batch_id: Number(form.batch_id),
         section_id: Number(form.section_id),
-      });
-      toast.success('Student created!');
-      setShowModal(false);
+      };
+      if (editingStudent && !payload.password) {
+        delete payload.password;
+      }
+
+      if (editingStudent) {
+        await API.put(`/department/students/${editingStudent.id}`, payload);
+        toast.success('Student updated!');
+      } else {
+        await API.post('/department/students', payload);
+        toast.success('Student created!');
+      }
+      closeModal();
       resetForm();
       load();
     } catch (err) {
@@ -159,8 +198,8 @@ export default function ManageStudents() {
       </div>
 
       <div className="card">
-        <div className="data-table-wrapper" style={{ overflowX: 'auto' }}>
-          <table className="data-table" style={{ minWidth: '1100px' }}>
+        <div className="data-table-wrapper">
+          <table className="data-table student-data-table">
             <thead>
               <tr>
                 <th>S.No</th>
@@ -194,7 +233,12 @@ export default function ManageStudents() {
                     <td>{student.entrance_marks || 0}</td>
                     <td>{student.attendance_pct || 0}%</td>
                     <td>{student.total_marks || 0}</td>
-                    <td><button className="btn btn-danger btn-sm" onClick={() => handleDelete(student.id)}><HiOutlineTrash /></button></td>
+                    <td>
+                      <div style={{ display: 'flex', gap: '8px' }}>
+                        <button className="btn btn-secondary btn-sm btn-icon" type="button" onClick={() => openEditModal(student)} title="Edit student"><HiOutlinePencil /></button>
+                        <button className="btn btn-danger btn-sm btn-icon" type="button" onClick={() => handleDelete(student.id)} title="Delete student"><HiOutlineTrash /></button>
+                      </div>
+                    </td>
                   </tr>
                 ))
               )}
@@ -204,17 +248,17 @@ export default function ManageStudents() {
       </div>
 
       {showModal && (
-        <div className="modal-overlay" onClick={() => setShowModal(false)}>
+        <div className="modal-overlay" onClick={closeModal}>
           <div className="modal" onClick={(e) => e.stopPropagation()}>
-            <h2>Add Student</h2>
-            <form onSubmit={handleCreate}>
+            <h2>{editingStudent ? 'Edit Student' : 'Add Student'}</h2>
+            <form onSubmit={handleSubmit}>
               <div className="form-row">
                 <div className="form-group"><label>Full Name</label><input className="form-control" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></div>
                 <div className="form-group"><label>Roll No</label><input className="form-control" value={form.roll_no} onChange={(e) => setForm({ ...form, roll_no: e.target.value })} required /></div>
               </div>
               <div className="form-row">
                 <div className="form-group"><label>Email</label><input type="email" className="form-control" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} required /></div>
-                <div className="form-group"><label>Password</label><input type="password" className="form-control" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required /></div>
+                <div className="form-group"><label>Password</label><input type="password" className="form-control" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} required={!editingStudent} placeholder={editingStudent ? 'Leave blank to keep current password' : ''} /></div>
               </div>
               <div className="form-row">
                 <div className="form-group"><label>Batch</label><select className="form-control" value={form.batch_id} onChange={(e) => setForm({ ...form, batch_id: e.target.value, section_id: '' })} required><option value="">Select batch</option>{batches.map((batch) => <option key={batch.id} value={batch.id}>{batch.name}</option>)}</select></div>
@@ -232,7 +276,7 @@ export default function ManageStudents() {
               <div className="form-row">
                 <div className="form-group"><label>Phone</label><input className="form-control" value={form.phone} onChange={(e) => setForm({ ...form, phone: e.target.value })} /></div>
               </div>
-              <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button type="submit" className="btn btn-primary">Create</button></div>
+              <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={closeModal}>Cancel</button><button type="submit" className="btn btn-primary">{editingStudent ? 'Update' : 'Create'}</button></div>
             </form>
           </div>
         </div>

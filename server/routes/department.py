@@ -11,13 +11,12 @@ dept_bp = Blueprint('department', __name__, url_prefix='/api/department')
 
 TIMETABLE_DAYS = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
 TIMETABLE_SLOTS = [
-    '09:00-09:50',
-    '09:50-10:40',
-    '10:40-11:30',
-    '11:30-12:20',
-    '01:30-02:20',
-    '02:20-03:10',
+    '09:00-10:40',   # slot 0  (100 min)
+    '10:40-12:20',   # slot 1  (100 min)
+    '01:30-03:10',   # slot 2  (100 min)
+    '03:10-04:00',   # slot 3  (50 min)
 ]
+
 NON_TEACHING_LABELS = [
     'Library',
     'Tutorial',
@@ -207,12 +206,9 @@ def build_timetable_pdf(section, entries):
     commands = ['1.10 w', '0 g', '0 G']
 
     commands.append(build_pdf_rect(margin - 6, margin - 6, content_width + 12, page_height - (margin * 2) + 12))
-
     commands.append(build_pdf_rect(margin, top_y - 24, content_width, 18, fill_gray=0.80))
     commands.append(build_pdf_centered_text(margin, top_y - 18, content_width, f'DEPARTMENT OF {department.dept_name.upper() if department else "ACADEMICS"}', font='F2', size=11))
-    commands.append(build_pdf_centered_text(margin, top_y - 38, content_width, (college.college_name if college else 'Attendance Management System').upper(), font='F2', size=11))
-    commands.append(build_pdf_centered_text(margin, top_y - 58, content_width, 'HANDOUT TIMETABLE', font='F2', size=11))
-
+    commands.append(build_pdf_centered_text(margin, top_y - 38, content_width,'ANDHRA UNIVERSITY', font='F2', size=11))
     meta_top = top_y - 78
     meta_height = 34
     meta_cols = [content_width * 0.38, content_width * 0.18, content_width * 0.18, content_width * 0.26]
@@ -230,31 +226,31 @@ def build_timetable_pdf(section, entries):
 
     table_top = meta_top - 46
     day_width = 58
-    slot_width = 92
+    slot_width = 170
     lunch_width = 34
     header_height = 34
     row_height = 30
     day_x = margin
     time_x = day_x + day_width
-    lunch_x = time_x + (slot_width * 4)
+    lunch_x = time_x + (slot_width * 2)
 
     commands.append(build_pdf_rect(day_x, table_top - header_height, day_width, header_height, fill_gray=0.84))
     commands.append(build_pdf_centered_text(day_x, table_top - 20, day_width, 'DAY', font='F2', size=9))
 
-    for slot_index in range(4):
+    for slot_index in range(2):
         x = time_x + (slot_index * slot_width)
         commands.append(build_pdf_rect(x, table_top - header_height, slot_width, header_height, fill_gray=0.84))
         commands.append(build_pdf_centered_text(x, table_top - 18, slot_width, TIMETABLE_SLOTS[slot_index], font='F2', size=8))
 
     commands.append(build_pdf_rect(lunch_x, table_top - header_height - (len(TIMETABLE_DAYS) * row_height), lunch_width, header_height + (len(TIMETABLE_DAYS) * row_height), fill_gray=0.88))
-    lunch_letters = list('LUNCH BREAK')
+    lunch_letters = list('LUNCH')
     for index, letter in enumerate(lunch_letters):
         y = table_top - 18 - (index * 14)
         commands.append(build_pdf_centered_text(lunch_x, y, lunch_width, letter, font='F2', size=8))
 
     after_lunch_x = lunch_x + lunch_width
-    for slot_index in range(4, 6):
-        x = after_lunch_x + ((slot_index - 4) * slot_width)
+    for slot_index in range(2, 4):
+        x = after_lunch_x + ((slot_index - 2) * slot_width)
         commands.append(build_pdf_rect(x, table_top - header_height, slot_width, header_height, fill_gray=0.84))
         commands.append(build_pdf_centered_text(x, table_top - 18, slot_width, TIMETABLE_SLOTS[slot_index], font='F2', size=8))
 
@@ -264,22 +260,22 @@ def build_timetable_pdf(section, entries):
         commands.append(build_pdf_rect(day_x, row_bottom, day_width, row_height))
         commands.append(build_pdf_centered_text(day_x, row_bottom + 11, day_width, day_name[:3].upper(), font='F2', size=9))
 
-        for slot_index in range(4):
+        for slot_index in range(2):
             x = time_x + (slot_index * slot_width)
             commands.append(build_pdf_rect(x, row_bottom, slot_width, row_height))
             entry = entry_map.get((day_order, slot_index))
             if entry:
-                commands.append(build_pdf_centered_text(x, row_bottom + 16, slot_width, truncate_text(entry.subject_code, 14), font='F2', size=8))
+                commands.append(build_pdf_centered_text(x, row_bottom + 16, slot_width, truncate_text(entry.subject_name or entry.subject_code, 20), font='F2', size=8))
                 commands.append(build_pdf_centered_text(x, row_bottom + 6, slot_width, truncate_text(entry.faculty_name or '-', 16), size=7))
             else:
                 commands.append(build_pdf_centered_text(x, row_bottom + 11, slot_width, truncate_text(get_non_teaching_label(day_order, slot_index), 16), size=7))
 
-        for slot_index in range(4, 6):
-            x = after_lunch_x + ((slot_index - 4) * slot_width)
+        for slot_index in range(2, 4):
+            x = after_lunch_x + ((slot_index - 2) * slot_width)
             commands.append(build_pdf_rect(x, row_bottom, slot_width, row_height))
             entry = entry_map.get((day_order, slot_index))
             if entry:
-                commands.append(build_pdf_centered_text(x, row_bottom + 16, slot_width, truncate_text(entry.subject_code, 14), font='F2', size=8))
+                commands.append(build_pdf_centered_text(x, row_bottom + 16, slot_width, truncate_text(entry.subject_name or entry.subject_code, 20), font='F2', size=8))
                 commands.append(build_pdf_centered_text(x, row_bottom + 6, slot_width, truncate_text(entry.faculty_name or '-', 16), size=7))
             else:
                 commands.append(build_pdf_centered_text(x, row_bottom + 11, slot_width, truncate_text(get_non_teaching_label(day_order, slot_index), 16), size=7))
@@ -322,15 +318,12 @@ def get_section_subject_assignments(section):
 
 
 def get_section_semester_subjects(dept_id, section):
-    """Get all actual subjects assigned to this section for the active semester."""
     assigned = SectionSubjectAssignment.query.filter_by(
         section_id=section.section_id,
         semester=section.current_semester
     ).all()
-
     if not assigned:
         return []
-
     assigned_codes = [a.subject_code for a in assigned]
     assigned_subjects = Subject.query.filter(
         Subject.subject_code.in_(assigned_codes),
@@ -374,7 +367,6 @@ def validate_section_timetable_readiness(section, dept_id):
             'missing_subjects': [],
             'weekly_class_target': 0,
         }
-
     allocation_map = get_section_subject_allocations(section)
     missing_subjects = [subject.subject_code for subject in semester_subjects if subject.subject_code not in allocation_map]
     return {
@@ -405,11 +397,7 @@ def build_timetable_grid(entries):
     entry_map = {(entry.day_order, entry.slot_index): entry for entry in entries}
     grid = []
     for day_order, day_name in enumerate(TIMETABLE_DAYS):
-        row = {
-            'day_order': day_order,
-            'day_name': day_name,
-            'slots': [],
-        }
+        row = {'day_order': day_order, 'day_name': day_name, 'slots': []}
         for slot_index, slot_label in enumerate(TIMETABLE_SLOTS):
             entry = entry_map.get((day_order, slot_index))
             row['slots'].append({
@@ -439,32 +427,49 @@ def enrich_timetable_entries(entries):
     return enriched
 
 
+def _is_lab_subject(subject_type, subject_name=''):
+    return 'lab' in (subject_type or '').lower() or 'lab' in (subject_name or '').lower()
+
+
+def _has_consecutive_theory_conflict(assigned_slots, faculty_id, day_order, slot_index):
+    for adj in [slot_index - 1, slot_index + 1]:
+        if 0 <= adj < len(TIMETABLE_SLOTS):
+            neighbour = assigned_slots.get((day_order, adj))
+            if neighbour and neighbour['faculty_id'] == faculty_id and not neighbour.get('is_lab'):
+                return True
+    return False
+
+
 def generate_section_timetable(section, subjects, allocation_map):
+    import random
+    from collections import Counter
+
     session_templates = []
-    weekly_target = get_weekly_class_target(len(subjects))
+
     for subject in subjects:
         allocation = allocation_map[subject.subject_code]
-        session_templates.extend([
-            {
+        is_lab = _is_lab_subject(subject.subject_type, subject.subject_name)
+        count = 1 if is_lab else 2
+        for _ in range(count):
+            session_templates.append({
                 'subject_code': subject.subject_code,
                 'faculty_id': allocation.faculty_id,
-            }
-            for _ in range(weekly_target)
-        ])
+                'is_lab': is_lab,
+            })
 
-    faculty_load = Counter(item['faculty_id'] for item in session_templates)
-    session_templates.sort(key=lambda item: (-faculty_load[item['faculty_id']], item['subject_code']))
+    random.shuffle(session_templates)
 
     busy_slots = get_busy_faculty_slots(exclude_section_id=section.section_id)
     assigned_slots = {}
-    faculty_day_usage = Counter()
-    subject_day_usage = Counter()
-    day_load = Counter()
-    max_day_load = max(1, (len(session_templates) + len(TIMETABLE_DAYS) - 1) // len(TIMETABLE_DAYS))
+
+    def has_same_subject_same_day(subject_code, day_order):
+        for (d, _), session in assigned_slots.items():
+            if d == day_order and session['subject_code'] == subject_code:
+                return True
+        return False
 
     def candidate_slots(session):
-        preferred = []
-        fallback = []
+        slots = []
         for day_order in range(len(TIMETABLE_DAYS)):
             for slot_index in range(len(TIMETABLE_SLOTS)):
                 slot_key = (day_order, slot_index)
@@ -472,27 +477,14 @@ def generate_section_timetable(section, subjects, allocation_map):
                     continue
                 if session['faculty_id'] in busy_slots.get(slot_key, set()):
                     continue
-                # no two consecutive theory sessions for same faculty
-                prev_slot = (day_order, slot_index - 1)
-                if slot_index > 0 and prev_slot in assigned_slots:
-                    prev_session = assigned_slots[prev_slot]
-                    if prev_session['faculty_id'] == session['faculty_id']:
-                        continue
-
-                ranking = (
-                    day_load[day_order] >= max_day_load,
-                    subject_day_usage[(session['subject_code'], day_order)] > 0,
-                    faculty_day_usage[(session['faculty_id'], day_order)],
-                    day_load[day_order],
-                    slot_index,
-                )
-                if subject_day_usage[(session['subject_code'], day_order)] == 0:
-                    preferred.append((ranking, slot_key))
-                else:
-                    fallback.append((ranking, slot_key))
-        ordered = preferred or fallback
-        ordered.sort(key=lambda item: item[0])
-        return [slot_key for _, slot_key in ordered]
+                if not session['is_lab'] and _has_consecutive_theory_conflict(
+                        assigned_slots, session['faculty_id'], day_order, slot_index):
+                    continue
+                if has_same_subject_same_day(session['subject_code'], day_order):
+                    continue
+                slots.append(slot_key)
+        random.shuffle(slots)
+        return slots
 
     def backtrack(index):
         if index == len(session_templates):
@@ -500,22 +492,16 @@ def generate_section_timetable(section, subjects, allocation_map):
         session = session_templates[index]
         for day_order, slot_index in candidate_slots(session):
             assigned_slots[(day_order, slot_index)] = session
-            faculty_day_usage[(session['faculty_id'], day_order)] += 1
-            subject_day_usage[(session['subject_code'], day_order)] += 1
-            day_load[day_order] += 1
             if backtrack(index + 1):
                 return True
             del assigned_slots[(day_order, slot_index)]
-            faculty_day_usage[(session['faculty_id'], day_order)] -= 1
-            subject_day_usage[(session['subject_code'], day_order)] -= 1
-            day_load[day_order] -= 1
         return False
 
     if not backtrack(0):
-        raise ValueError('Unable to generate a conflict-free timetable with the current faculty allocations')
+        raise ValueError("Unable to generate timetable with given constraints")
 
     generated_entries = []
-    for (day_order, slot_index), session in sorted(assigned_slots.items()):
+    for (day_order, slot_index), session in assigned_slots.items():
         generated_entries.append(
             TimetableEntry(
                 section_id=section.section_id,
@@ -528,16 +514,20 @@ def generate_section_timetable(section, subjects, allocation_map):
                 slot_label=TIMETABLE_SLOTS[slot_index],
             )
         )
-    return generated_entries, weekly_target
+
+    return generated_entries, None
 
 
 def save_section_timetable(section, subjects, allocation_map, raw_entries):
     weekly_target = get_weekly_class_target(len(subjects))
     subject_codes = {subject.subject_code for subject in subjects}
+    subject_type_map = {subject.subject_code: subject.subject_type for subject in subjects}
+    subject_name_map = {subject.subject_code: subject.subject_name for subject in subjects}
     busy_slots = get_busy_faculty_slots(exclude_section_id=section.section_id)
     seen_slots = set()
     subject_counts = Counter()
     prepared_entries = []
+    slot_faculty_map = {}
 
     for item in raw_entries:
         subject_code = (item.get('subject_code') or '').strip().upper()
@@ -552,20 +542,44 @@ def save_section_timetable(section, subjects, allocation_map, raw_entries):
             slot_index = int(slot_index)
         except (TypeError, ValueError):
             raise ValueError('Invalid timetable slot coordinates')
-        if day_order < 0 or day_order >= len(TIMETABLE_DAYS) or slot_index < 0 or slot_index >= len(TIMETABLE_SLOTS):
+
+        if day_order < 0 or day_order >= len(TIMETABLE_DAYS) or \
+           slot_index < 0 or slot_index >= len(TIMETABLE_SLOTS):
             raise ValueError('Timetable slot is out of range')
+
         if subject_code not in subject_codes:
             raise ValueError(f'{subject_code} is not a valid subject for this section')
         if subject_code not in allocation_map:
             raise ValueError(f'{subject_code} is not allocated to any faculty for this section')
+
         slot_key = (day_order, slot_index)
+        faculty_id = allocation_map[subject_code].faculty_id
+
         if slot_key in seen_slots:
             raise ValueError('A timetable slot cannot contain more than one subject')
-        faculty_id = allocation_map[subject_code].faculty_id
+
         if faculty_id in busy_slots.get(slot_key, set()):
-            raise ValueError(f'Faculty conflict detected for {subject_code} on {TIMETABLE_DAYS[day_order]} {TIMETABLE_SLOTS[slot_index]}')
+            raise ValueError(
+                f'Faculty conflict: the faculty teaching {subject_code} is already '
+                f'scheduled in another section on {TIMETABLE_DAYS[day_order]} '
+                f'{TIMETABLE_SLOTS[slot_index]}'
+            )
+
+        is_lab = _is_lab_subject(
+            subject_type_map.get(subject_code, ''),
+            subject_name_map.get(subject_code, ''),
+        )
+        if not is_lab and _has_consecutive_theory_conflict(slot_faculty_map, faculty_id, day_order, slot_index):
+            raise ValueError(
+                f'Consecutive theory conflict: {subject_code} on '
+                f'{TIMETABLE_DAYS[day_order]} slot {slot_index + 1} would give '
+                f'the same faculty two back-to-back theory classes.'
+            )
+
         seen_slots.add(slot_key)
+        slot_faculty_map[slot_key] = {'faculty_id': faculty_id, 'is_lab': is_lab}
         subject_counts[subject_code] += 1
+
         prepared_entries.append(
             TimetableEntry(
                 section_id=section.section_id,
@@ -579,9 +593,14 @@ def save_section_timetable(section, subjects, allocation_map, raw_entries):
             )
         )
 
-    expected_counts = {subject.subject_code: weekly_target for subject in subjects}
+    expected_counts = {}
+    for subject in subjects:
+        is_lab = _is_lab_subject(subject.subject_type, subject.subject_name)
+        expected_counts[subject.subject_code] = 1 if is_lab else 2
     if dict(subject_counts) != expected_counts:
-        raise ValueError(f'Each subject must appear exactly {weekly_target} times in the timetable')
+        raise ValueError(
+            f'Each subject must appear exactly {weekly_target} times in the timetable'
+        )
 
     TimetableEntry.query.filter_by(section_id=section.section_id).delete()
     db.session.add_all(prepared_entries)
@@ -1381,6 +1400,7 @@ def get_faculty(current_user):
             'name': user.name if user else None,
             'email': user.email if user else None,
             'phone': user.phone if user else None,
+            'designation': user.designation if user else None,
             'dept_id': f.dept_id,
             'allocations': formatted_allocs,
         })
@@ -1397,13 +1417,42 @@ def create_faculty(current_user):
     email = normalize_email(data['email'])
     if User.query.filter_by(email=email).first():
         return jsonify({'error': 'Email already exists'}), 409
-    user = User(name=data['name'], email=email, password_hash=hash_password(data['password']), phone=data.get('phone'), role='FACULTY', dept_id=current_user.dept_id, college_id=current_user.college_id)
+    user = User(name=data['name'], email=email, password_hash=hash_password(data['password']), phone=data.get('phone'), designation=data.get('designation'), role='FACULTY', dept_id=current_user.dept_id, college_id=current_user.college_id)
     db.session.add(user)
     db.session.flush()
     faculty = Faculty(user_id=user.user_id, dept_id=current_user.dept_id)
     db.session.add(faculty)
     db.session.commit()
-    return jsonify({'id': faculty.faculty_id, 'name': user.name, 'email': user.email, 'phone': user.phone, 'dept_id': faculty.dept_id}), 201
+    return jsonify({'id': faculty.faculty_id, 'name': user.name, 'email': user.email, 'phone': user.phone, 'designation': user.designation, 'dept_id': faculty.dept_id}), 201
+
+@dept_bp.route('/faculty/<int:faculty_id>', methods=['PUT'])
+@token_required
+@role_required('DEPT_ADMIN')
+def update_faculty(current_user, faculty_id):
+    faculty = db.session.get(Faculty, faculty_id)
+    if not faculty or faculty.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Faculty not found'}), 404
+
+    user = db.session.get(User, faculty.user_id)
+    if not user:
+        return jsonify({'error': 'User not found'}), 404
+
+    data = request.get_json() or {}
+
+    if data.get('name'):
+        user.name = data['name']
+    if data.get('email'):
+        email = normalize_email(data['email'])
+        if User.query.filter_by(email=email).filter(User.user_id != user.user_id).first():
+            return jsonify({'error': 'Email already exists'}), 409
+        user.email = email
+    if data.get('phone') is not None:
+        user.phone = data['phone']
+    if data.get('designation') is not None:
+        user.designation = data['designation']
+
+    db.session.commit()
+    return jsonify({'id': faculty.faculty_id, 'name': user.name, 'email': user.email, 'phone': user.phone, 'designation': user.designation})
 
 @dept_bp.route('/faculty/<int:faculty_id>', methods=['DELETE'])
 @token_required
@@ -1856,6 +1905,71 @@ def create_student(current_user):
     db.session.add(student)
     db.session.commit()
     return jsonify({'id': student.student_id, 'name': user.name, 'roll_no': student.roll_no}), 201
+
+@dept_bp.route('/students/<int:student_id>', methods=['PUT'])
+@token_required
+@role_required('DEPT_ADMIN')
+def update_student(current_user, student_id):
+    student = db.session.get(Student, student_id)
+    if not student or student.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Student not found'}), 404
+
+    data = request.get_json() or {}
+    required = ['name', 'email', 'roll_no', 'batch_id', 'section_id', 'student_type', 'category']
+    if not all(data.get(k) for k in required):
+        return jsonify({'error': 'name, email, roll_no, batch_id, section_id, student_type, category are required'}), 400
+
+    try:
+        batch_id = int(data['batch_id'])
+        section_id = int(data['section_id'])
+    except (ValueError, TypeError):
+        return jsonify({'error': 'batch_id and section_id must be integers'}), 400
+
+    batch = db.session.get(Batch, batch_id)
+    section = db.session.get(Section, section_id)
+    if not batch or batch.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Invalid batch'}), 400
+    if not section or section.dept_id != current_user.dept_id:
+        return jsonify({'error': 'Invalid section'}), 400
+    if section.batch_id != batch_id:
+        return jsonify({'error': 'Section does not belong to this batch'}), 400
+
+    email = normalize_email(data['email'])
+    roll_no = data['roll_no'].strip().upper()
+    existing_user = User.query.filter(User.email == email, User.user_id != student_id).first()
+    if existing_user:
+        return jsonify({'error': 'Email already exists'}), 409
+    existing_student = Student.query.filter(
+        Student.roll_no == roll_no,
+        Student.dept_id == current_user.dept_id,
+        Student.student_id != student_id,
+    ).first()
+    if existing_student:
+        return jsonify({'error': 'Roll number already exists'}), 409
+
+    user = db.session.get(User, student.student_id)
+    phone = (data.get('phone') or '').strip()
+    password = (data.get('password') or '').strip()
+
+    if user:
+        user.name = data['name'].strip()
+        user.email = email
+        user.phone = phone
+        if password:
+            user.password_hash = hash_password(password)
+
+    student.roll_no = roll_no
+    student.batch_id = batch_id
+    student.section_id = section_id
+    student.email = email
+    student.phone = phone
+    student.student_type = data.get('student_type', 'Regular')
+    student.passport_number = (data.get('passport_number') or '').strip() or None
+    student.category = (data.get('category') or '').strip()
+    student.entrance_marks = float(data.get('entrance_marks') or 0)
+
+    db.session.commit()
+    return jsonify({'message': 'Student updated successfully'})
 
 @dept_bp.route('/students/bulk', methods=['POST'])
 @token_required

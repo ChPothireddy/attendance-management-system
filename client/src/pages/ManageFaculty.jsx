@@ -6,12 +6,14 @@ import { HiOutlinePlus, HiOutlineTrash } from 'react-icons/hi';
 export default function ManageFaculty() {
   const [faculty, setFaculty] = useState([]);
   const [showModal, setShowModal] = useState(false);
+  const [editingFaculty, setEditingFaculty] = useState(null);
   const [allocatingFaculty, setAllocatingFaculty] = useState(null);
   const [subjects, setSubjects] = useState([]);
   const [batches, setBatches] = useState([]);
   const [sections, setSections] = useState([]);
   const [allocForm, setAllocForm] = useState({ batch_id: '', section_id: '', subject_code: '' });
-  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '' });
+  const [filteredSubjects, setFilteredSubjects] = useState([]);
+  const [form, setForm] = useState({ name: '', email: '', password: '', phone: '', designation: '' });
 
   useEffect(() => {
     load();
@@ -27,7 +29,7 @@ export default function ManageFaculty() {
       await API.post('/department/faculty', form);
       toast.success('Faculty created!');
       setShowModal(false);
-      setForm({ name: '', email: '', password: '', phone: '' });
+      setForm({ name: '', email: '', password: '', phone: '', designation: '' });
       load();
     } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
   };
@@ -38,9 +40,49 @@ export default function ManageFaculty() {
     catch { toast.error('Failed'); }
   };
 
+  const handleEdit = (faculty) => {
+    setEditingFaculty(faculty);
+    setForm({ name: faculty.name, email: faculty.email, phone: faculty.phone || '', designation: faculty.designation || '' });
+  };
+
   const handleAllocate = (facultyId) => {
     setAllocatingFaculty(facultyId);
     setAllocForm({ batch_id: '', section_id: '', subject_code: '' });
+    setFilteredSubjects([]);
+  };
+
+  const handleUpdate = async (e) => {
+    e.preventDefault();
+    try {
+      await API.put(`/department/faculty/${editingFaculty.id}`, form);
+      toast.success('Faculty updated!');
+      setEditingFaculty(null);
+      setForm({ name: '', email: '', password: '', phone: '', designation: '' });
+      load();
+    } catch (err) { toast.error(err.response?.data?.error || 'Failed'); }
+  };
+
+  const loadSubjectsForSection = async (sectionId) => {
+    if (!sectionId) {
+      setFilteredSubjects([]);
+      return;
+    }
+    try {
+      const res = await API.get(`/department/subjects?section_id=${sectionId}`);
+      const matched = res.data || [];
+      if (!matched.length) {
+        const section = sections.find((s) => String(s.id) === String(sectionId));
+        if (section) {
+          const fallback = subjects.filter((subject) => subject.semester === section.current_semester);
+          setFilteredSubjects(fallback);
+          return;
+        }
+      }
+      setFilteredSubjects(matched);
+    } catch (err) {
+      setFilteredSubjects([]);
+      toast.error('Failed to load subjects for section');
+    }
   };
 
   const handleClearAllocations = async (facultyId) => {
@@ -103,6 +145,7 @@ export default function ManageFaculty() {
                   </td>
                   <td>
                     <div style={{display:'flex', gap:'4px'}}>
+                      <button className="btn btn-info btn-sm" onClick={() => handleEdit(f)}>Edit</button>
                       <button className="btn btn-secondary btn-sm" onClick={() => handleAllocate(f.id)}>Allocate</button>
                       <button className="btn btn-warning btn-sm" onClick={() => handleClearAllocations(f.id)} disabled={f.allocations.length === 0}>Clear All</button>
                       <button className="btn btn-danger btn-sm" onClick={() => handleDelete(f.id)}><HiOutlineTrash /></button>
@@ -125,7 +168,22 @@ export default function ManageFaculty() {
                 <div className="form-group"><label>Password</label><input type="password" className="form-control" placeholder="Initial password" value={form.password} onChange={e => setForm({...form, password: e.target.value})} required /></div>
               </div>
               <div className="form-group"><label>Phone</label><input className="form-control" placeholder="Phone number" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
+              <div className="form-group"><label>Designation</label><input className="form-control" placeholder="e.g., Assistant Professor" value={form.designation} onChange={e => setForm({...form, designation: e.target.value})} /></div>
               <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button><button type="submit" className="btn btn-primary">Create</button></div>
+            </form>
+          </div>
+        </div>
+      )}
+      {editingFaculty && (
+        <div className="modal-overlay" onClick={() => setEditingFaculty(null)}>
+          <div className="modal" onClick={e => e.stopPropagation()}>
+            <h2>Edit Faculty</h2>
+            <form onSubmit={handleUpdate}>
+              <div className="form-group"><label>Full Name</label><input className="form-control" placeholder="Prof. Name" value={form.name} onChange={e => setForm({...form, name: e.target.value})} required /></div>
+              <div className="form-group"><label>Email</label><input type="email" className="form-control" placeholder="email@university.com" value={form.email} onChange={e => setForm({...form, email: e.target.value})} required /></div>
+              <div className="form-group"><label>Phone</label><input className="form-control" placeholder="Phone number" value={form.phone} onChange={e => setForm({...form, phone: e.target.value})} /></div>
+              <div className="form-group"><label>Designation</label><input className="form-control" placeholder="e.g., Assistant Professor" value={form.designation} onChange={e => setForm({...form, designation: e.target.value})} /></div>
+              <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setEditingFaculty(null)}>Cancel</button><button type="submit" className="btn btn-primary">Update</button></div>
             </form>
           </div>
         </div>
@@ -137,17 +195,11 @@ export default function ManageFaculty() {
             <form onSubmit={handleAllocSubmit}>
               <div className="form-row">
                 <div className="form-group"><label>Batch</label><select className="form-control" value={allocForm.batch_id} onChange={e => setAllocForm({...allocForm, batch_id: e.target.value, section_id: ''})} required><option value="">Select batch</option>{batches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</select></div>
-                <div className="form-group"><label>Section</label><select className="form-control" value={allocForm.section_id} onChange={e => setAllocForm({...allocForm, section_id: e.target.value})} required disabled={!allocForm.batch_id}><option value="">Select section</option>{sections.filter(s => s.batch_id == allocForm.batch_id).map(s => <option key={s.id} value={s.id}>Sec {s.name} (Sem {s.current_semester})</option>)}</select></div>
+                <div className="form-group"><label>Section</label><select className="form-control" value={allocForm.section_id} onChange={e => { setAllocForm({...allocForm, section_id: e.target.value, subject_code: ''}); loadSubjectsForSection(e.target.value); }} required disabled={!allocForm.batch_id}><option value="">Select section</option>{sections.filter(s => s.batch_id == allocForm.batch_id).map(s => <option key={s.id} value={s.id}>Sec {s.name} (Sem {s.current_semester})</option>)}</select></div>
               </div>
               <div className="form-group"><label>Subject</label><select className="form-control" value={allocForm.subject_code} onChange={e => setAllocForm({...allocForm, subject_code: e.target.value})} required>
                 <option value="">Select subject</option>
-                {subjects
-                  .filter(s => {
-                    if (!allocForm.section_id) return true;
-                    const section = sections.find(sec => sec.id == allocForm.section_id);
-                    return section ? s.semester == section.current_semester : true;
-                  })
-                  .map(s => <option key={s.code} value={s.code}>{s.code} - {s.name}</option>)}
+                {filteredSubjects.map(s => <option key={s.code} value={s.code}>{s.code} - {s.name}</option>)}
               </select></div>
               <div className="modal-actions"><button type="button" className="btn btn-secondary" onClick={() => setAllocatingFaculty(null)}>Cancel</button><button type="submit" className="btn btn-primary">Allocate</button></div>
             </form>

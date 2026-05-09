@@ -24,6 +24,7 @@ export default function ManageAllocations() {
   const [faculty, setFaculty] = useState([]);
   const [sections, setSections] = useState([]);
   const [subjects, setSubjects] = useState([]);
+  const [sectionSpecificSubjects, setSectionSpecificSubjects] = useState([]);
   const [selectedSectionId, setSelectedSectionId] = useState('');
   const [facultyBySubject, setFacultyBySubject] = useState({});
   const [timetable, setTimetable] = useState({
@@ -46,6 +47,7 @@ export default function ManageAllocations() {
   useEffect(() => {
     if (selectedSectionId) {
       loadTimetable(selectedSectionId);
+      loadSectionSubjects(selectedSectionId);
     } else {
       setTimetable({
         generated: false,
@@ -56,6 +58,7 @@ export default function ManageAllocations() {
         allocated_subjects: [],
         grid: [],
       });
+      setSectionSpecificSubjects([]);
     }
   }, [selectedSectionId]);
 
@@ -66,10 +69,19 @@ export default function ManageAllocations() {
     return allocations.filter((item) => item.section_id === selectedSection.id && item.subject_code === subjectCode);
   }
 
-  const sectionSubjects = useMemo(() => {
-    if (!selectedSection) return [];
-    return subjects.filter((subject) => subject.semester === selectedSection.current_semester);
-  }, [subjects, selectedSection]);
+  const loadSectionSubjects = async (sectionId) => {
+    try {
+      const res = await API.get(`/department/subjects?section_id=${sectionId}`);
+      setSectionSpecificSubjects(res.data || []);
+    } catch (err) {
+      setSectionSpecificSubjects([]);
+      toast.error(err.response?.data?.error || 'Failed to load section subjects');
+    }
+  };
+
+  const sectionSubjects = selectedSection
+    ? sectionSpecificSubjects
+    : [];
 
   const allocatedCount = useMemo(
     () => sectionSubjects.filter((subject) => getAllocatedFaculty(subject.code).length > 0).length,
@@ -109,6 +121,7 @@ export default function ManageAllocations() {
     await loadBaseData();
     if (sectionId) {
       await loadTimetable(sectionId);
+      await loadSectionSubjects(sectionId);
     }
   };
 

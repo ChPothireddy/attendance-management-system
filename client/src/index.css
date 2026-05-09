@@ -163,6 +163,7 @@ input, select, textarea {
   box-shadow: var(--shadow-sm);
   border: 1px solid var(--gray-200);
   padding: 24px;
+  min-width: 0;
   transition: var(--transition-base);
 }
 
@@ -285,6 +286,7 @@ select.form-control {
 }
 
 .data-table-wrapper {
+  max-width: 100%;
   overflow-x: auto;
   border-radius: var(--border-radius);
 }
@@ -308,21 +310,59 @@ select.form-control {
   text-transform: uppercase;
   font-size: 0.74rem;
   letter-spacing: 0.5px;
-  white-space: nowrap;
+  white-space: normal;
 }
 
 .data-table td {
   padding: 12px 16px;
   border-bottom: 1px solid var(--gray-100);
   color: var(--gray-700);
+  white-space: normal;
+  word-break: break-word;
 }
 
-.data-table tbody tr {
-  transition: var(--transition-fast);
+.student-data-table {
+  width: max-content;
+  min-width: 100%;
 }
 
-.data-table tbody tr:hover {
-  background: #f8fafc;
+.student-data-table th,
+.student-data-table td {
+  white-space: nowrap;
+  word-break: normal;
+}
+
+/* Responsive table styles */
+.responsive-table {
+  min-width: 0;
+}
+
+@media (max-width: 768px) {
+  .responsive-table {
+    min-width: 0;
+  }
+  
+  .responsive-table th:nth-child(n+6),
+  .responsive-table td:nth-child(n+6) {
+    display: none;
+  }
+  
+  .responsive-table th:last-child,
+  .responsive-table td:last-child {
+    display: table-cell;
+  }
+}
+
+@media (max-width: 480px) {
+  .responsive-table th:nth-child(n+4),
+  .responsive-table td:nth-child(n+4) {
+    display: none;
+  }
+  
+  .responsive-table th:last-child,
+  .responsive-table td:last-child {
+    display: table-cell;
+  }
 }
 
 .badge {

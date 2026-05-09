@@ -7,8 +7,8 @@ import './Login.css';
 const demoAccounts = [
   { label: 'Super Admin', email: 'andhrauniversity@auce.edu.in', password: 'SuperAdmin' },
   { label: 'Dept Admin', email: '	cse@auce.edu.in', password: 'CSEAdmin' },
-  { label: 'Faculty', email: 'srinivas@auce.edu.in', password: 'Faculty@123' },
-  { label: 'Student', email: 'student@auce.edu.in', password: 'Student@123' },
+  { label: 'Faculty', email: 'jhansirani@auce.edu.in', password: 'Faculty@123' },
+  { label: 'Student', email: '323506402001@auce.edu.in', password: 'Student@123' },
 ];
 
 export default function Login() {

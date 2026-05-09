@@ -148,6 +148,7 @@ class User(db.Model):
     password_hash = db.Column(db.String(255), nullable=False)
     name = db.Column(db.String(120), nullable=True)
     phone = db.Column(db.String(20), nullable=True)
+    designation = db.Column(db.String(100), nullable=True)  # For faculty designation
     dept_id = db.Column(db.Integer, db.ForeignKey('departments.dept_id'), nullable=True)  # For DEPT_ADMIN
     college_id = db.Column(db.Integer, db.ForeignKey('colleges.college_id'), nullable=True)
 
@@ -158,6 +159,7 @@ class User(db.Model):
             'role': self.role,
             'name': self.name,
             'phone': self.phone,
+            'designation': self.designation,
             'dept_id': self.dept_id,
             'college_id': self.college_id,
         }
