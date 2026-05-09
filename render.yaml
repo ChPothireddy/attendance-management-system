@@ -8,9 +8,9 @@ services:
     startCommand: python server/app.py
     envVars:
       - key: SECRET_KEY
-        scope: run
+        generateValue: true
       - key: DATABASE_URL
-        scope: run
+        sync: false
       - key: FLASK_ENV
         value: production
       - key: HOST
