@@ -28,38 +28,39 @@ def create_app():
     app.register_blueprint(faculty_bp)
     app.register_blueprint(student_bp)
 
-    def _ensure_column(table_name, column_sql):
-        inspector = inspect(db.engine)
+    def _ensure_column(inspector, table_name, column_sql):
         columns = [c['name'] for c in inspector.get_columns(table_name)]
         col_name = column_sql.split()[0]
         if col_name not in columns:
             db.session.execute(text(f'ALTER TABLE {table_name} ADD COLUMN {column_sql}'))
             db.session.commit()
 
-    with app.app_context():
-        # Ensure tables exist for the current SQLAlchemy models
-        try:
-            db.create_all()
-        except Exception as e:
-            print('DB create_all warning:', repr(e))
+    if app.config.get('AUTO_SYNC_SCHEMA'):
+        with app.app_context():
+            # Ensure tables exist for the current SQLAlchemy models
+            try:
+                db.create_all()
+            except Exception as e:
+                print('DB create_all warning:', repr(e))
 
-        # add new fields if missing (safe, idempotent)
-        try:
-            _ensure_column('sections', 'program_id INTEGER')
-            _ensure_column('sections', 'updated_at DATETIME')
-            _ensure_column('subjects', 'periods INTEGER')
-            _ensure_column('subjects', "subject_type TEXT DEFAULT 'Common'")
-            _ensure_column('subjects', 'batch_id INTEGER')
-            _ensure_column('subjects', 'program_id INTEGER')
-            _ensure_column('students', "student_type TEXT DEFAULT 'Regular'")
-            _ensure_column('students', 'passport_number TEXT')
-            _ensure_column('students', 'category TEXT')
-            _ensure_column('students', 'entrance_marks REAL DEFAULT 0')
-            _ensure_column('students', 'created_at DATETIME')
-            _ensure_column('format_subjects', 'mapped_subject_code TEXT')
-            _ensure_column('section_subject_assignments', 'format_code TEXT')
-        except Exception as e:
-            print('Schema migration warning:', repr(e))
+            # add new fields if missing (safe, idempotent)
+            try:
+                inspector = inspect(db.engine)
+                _ensure_column(inspector, 'sections', 'program_id INTEGER')
+                _ensure_column(inspector, 'sections', 'updated_at DATETIME')
+                _ensure_column(inspector, 'subjects', 'periods INTEGER')
+                _ensure_column(inspector, 'subjects', "subject_type TEXT DEFAULT 'Common'")
+                _ensure_column(inspector, 'subjects', 'batch_id INTEGER')
+                _ensure_column(inspector, 'subjects', 'program_id INTEGER')
+                _ensure_column(inspector, 'students', "student_type TEXT DEFAULT 'Regular'")
+                _ensure_column(inspector, 'students', 'passport_number TEXT')
+                _ensure_column(inspector, 'students', 'category TEXT')
+                _ensure_column(inspector, 'students', 'entrance_marks REAL DEFAULT 0')
+                _ensure_column(inspector, 'students', 'created_at DATETIME')
+                _ensure_column(inspector, 'format_subjects', 'mapped_subject_code TEXT')
+                _ensure_column(inspector, 'section_subject_assignments', 'format_code TEXT')
+            except Exception as e:
+                print('Schema migration warning:', repr(e))
 
     @app.route('/api/health')
     def health():

@@ -1,5 +1,5 @@
-name,email,password,roll_no,batch_id,program_id,section_id,phone,student_type,passport_number,category,entrance_marks
-"Demo Student",student@demo.com,student123,CS001,1,1,1,1234567892,Regular,,General,85
-"Alice Johnson",alice.johnson@college.edu,Welcome123,21CS001,1,1,1,5551230001,Regular,,General,85
-"Bob Smith",bob.smith@college.edu,Welcome123,21CS002,1,1,1,5551230002,Foreigner,FG1234567,International,90
-"Charlie Lee",charlie.lee@college.edu,Welcome123,21CS003,1,1,1,5551230003,NRI,,NRI,88
+name,email,password,roll_no,batch_name,section_name,current_semester,phone,student_type,passport_number,category,entrance_marks
+"Demo Student",student@demo.com,student123,CS001,2023-27,A,1,1234567892,Regular,,General,85
+"Alice Johnson",alice.johnson@college.edu,Welcome123,21CS001,2023-27,A,1,5551230001,Regular,,General,85
+"Bob Smith",bob.smith@college.edu,Welcome123,21CS002,2023-27,A,1,5551230002,Foreigner,FG1234567,International,90
+"Charlie Lee",charlie.lee@college.edu,Welcome123,21CS003,2023-27,A,1,5551230003,NRI,,NRI,88

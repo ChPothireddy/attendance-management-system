@@ -4,6 +4,7 @@ from collections import Counter, defaultdict
 from datetime import datetime, timezone
 
 from flask import Blueprint, request, jsonify, make_response
+from sqlalchemy import case, func
 from models import db, User, Section, Batch, BatchSection, Faculty, FacultyBatchSection, Student, Department, College, AttendanceSession, AttendanceRecord, Subject, Semester, Program, Mark, TimetableEntry, SectionSubjectFormat, SectionSubjectAssignment, FormatSubject
 from auth import hash_password, normalize_email, token_required, role_required
 
@@ -2238,30 +2239,91 @@ def get_students(current_user):
         query = query.filter_by(student_type=student_type)
 
     query = query.order_by(Student.roll_no.asc())
-    student_list = []
-    for s in query.all():
-        u = db.session.get(User, s.student_id)
-        if not u:
-            u = User.query.filter_by(email=s.email).first()
-        section = db.session.get(Section, s.section_id)
-        batch = db.session.get(Batch, s.batch_id)
+    students = query.all()
+    student_ids = [s.student_id for s in students]
+    section_ids_for_students = {s.section_id for s in students}
+    batch_ids_for_students = {s.batch_id for s in students}
 
-        total = AttendanceRecord.query.filter_by(student_id=s.student_id).count()
-        present = AttendanceRecord.query.filter_by(student_id=s.student_id, status='P').count()
+    users_by_id = {
+        user.user_id: user
+        for user in User.query.filter(User.user_id.in_(student_ids)).all()
+    } if student_ids else {}
+    missing_user_emails = [s.email for s in students if s.student_id not in users_by_id and s.email]
+    users_by_email = {
+        user.email.lower(): user
+        for user in User.query.filter(User.email.in_(missing_user_emails)).all()
+    } if missing_user_emails else {}
+    sections_by_id = {
+        section.section_id: section
+        for section in Section.query.filter(Section.section_id.in_(section_ids_for_students)).all()
+    } if section_ids_for_students else {}
+    batches_by_id = {
+        batch.batch_id: batch
+        for batch in Batch.query.filter(Batch.batch_id.in_(batch_ids_for_students)).all()
+    } if batch_ids_for_students else {}
+    program_ids = {batch.program_id for batch in batches_by_id.values() if batch.program_id}
+    programs_by_id = {
+        program.program_id: program
+        for program in Program.query.filter(Program.program_id.in_(program_ids)).all()
+    } if program_ids else {}
+
+    attendance_by_student = {}
+    if student_ids:
+        attendance_rows = (
+            db.session.query(
+                AttendanceRecord.student_id,
+                func.count(AttendanceRecord.session_id),
+                func.sum(case((AttendanceRecord.status == 'P', 1), else_=0)),
+            )
+            .filter(AttendanceRecord.student_id.in_(student_ids))
+            .group_by(AttendanceRecord.student_id)
+            .all()
+        )
+        attendance_by_student = {
+            student_id: {'total': total or 0, 'present': present or 0}
+            for student_id, total, present in attendance_rows
+        }
+
+    marks_by_student = defaultdict(dict)
+    if student_ids:
+        mark_rows = (
+            db.session.query(Mark.student_id, Mark.exam_type, Mark.obtained_marks, Mark.max_marks)
+            .filter(
+                Mark.student_id.in_(student_ids),
+                Mark.exam_type.in_(['mid1', 'mid2', 'assignment1', 'assignment2']),
+            )
+            .all()
+        )
+        for student_id, exam_type, obtained_marks, max_marks in mark_rows:
+            marks_by_student[student_id][exam_type] = {
+                'obtained_marks': obtained_marks or 0,
+                'max_marks': max_marks or 0,
+            }
+
+    student_list = []
+    for s in students:
+        u = users_by_id.get(s.student_id) or users_by_email.get((s.email or '').lower())
+        section = sections_by_id.get(s.section_id)
+        batch = batches_by_id.get(s.batch_id)
+
+        attendance = attendance_by_student.get(s.student_id, {'total': 0, 'present': 0})
+        total = attendance['total']
+        present = attendance['present']
         attendance_pct = round((present / total) * 100, 1) if total > 0 else 0
 
-        mid1 = Mark.query.filter_by(student_id=s.student_id, exam_type='mid1').first()
-        mid2 = Mark.query.filter_by(student_id=s.student_id, exam_type='mid2').first()
-        assign1 = Mark.query.filter_by(student_id=s.student_id, exam_type='assignment1').first()
-        assign2 = Mark.query.filter_by(student_id=s.student_id, exam_type='assignment2').first()
+        student_marks = marks_by_student.get(s.student_id, {})
+        mid1 = student_marks.get('mid1')
+        mid2 = student_marks.get('mid2')
+        assign1 = student_marks.get('assignment1')
+        assign2 = student_marks.get('assignment2')
 
-        best_mid = max(mid1.obtained_marks if mid1 else 0, mid2.obtained_marks if mid2 else 0)
+        best_mid = max(mid1['obtained_marks'] if mid1 else 0, mid2['obtained_marks'] if mid2 else 0)
         best_mid = min(best_mid, 20)
         assignment_total = 0
         if assign1:
-            assignment_total += min(assign1.obtained_marks, assign1.max_marks or 0)
+            assignment_total += min(assign1['obtained_marks'], assign1['max_marks'])
         if assign2:
-            assignment_total += min(assign2.obtained_marks, assign2.max_marks or 0)
+            assignment_total += min(assign2['obtained_marks'], assign2['max_marks'])
         assignment_total = min(assignment_total, 10)
 
         total_marks = round(best_mid + assignment_total, 2)
@@ -2288,7 +2350,7 @@ def get_students(current_user):
             'batch_id': s.batch_id,
             'batch_name': batch.batch_name if batch else None,
             'program_id': batch.program_id if batch else None,
-            'program_name': (db.session.get(Program, batch.program_id).program_name if batch and batch.program_id else None),
+            'program_name': (programs_by_id.get(batch.program_id).program_name if batch and batch.program_id and programs_by_id.get(batch.program_id) else None),
             'attendance_pct': attendance_pct,
             'total_marks': total_marks,
         })
@@ -2422,6 +2484,9 @@ def parse_semester_value(value):
     text = str(value).strip().upper()
     if text.isdigit():
         return int(text)
+    sem_prefix_match = re.search(r'\bSEM(?:ESTER)?\s*[-:]?\s*(\d+)\b', text)
+    if sem_prefix_match:
+        return int(sem_prefix_match.group(1))
     semester_match = re.search(r'(\d+)(?:ST|ND|RD|TH)?\s+SEMESTER', text)
     if semester_match:
         return int(semester_match.group(1))
@@ -2434,18 +2499,100 @@ def parse_semester_value(value):
     return roman_values.get(text, 1)
 
 
-def parse_batch_year_span(batch_name):
+def parse_batch_year_range(batch_name):
     match = re.match(r'^\s*(?P<start>\d{4})\s*-\s*(?P<end>\d{2}|\d{4})\s*$', str(batch_name or '').strip())
     if not match:
         return None
     start_year = int(match.group('start'))
     end_part = match.group('end')
     end_year = int(end_part) if len(end_part) == 4 else int(str(start_year)[:2] + end_part)
+    return start_year, end_year
+
+
+def parse_batch_year_span(batch_name):
+    year_range = parse_batch_year_range(batch_name)
+    if not year_range:
+        return None
+    start_year, end_year = year_range
     return end_year - start_year
 
 
-def create_bulk_batch_if_possible(current_user, batch_name, current_semester):
-    dept_batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
+def find_batch_by_identity(current_user, batch_identity, bulk_cache=None):
+    batch_identity = clean_bulk_cell(batch_identity)
+    if not batch_identity:
+        return None
+
+    if bulk_cache:
+        direct = bulk_cache['batches_by_name'].get(batch_identity.lower())
+        if direct:
+            return direct
+        year_range = parse_batch_year_range(batch_identity)
+        if year_range:
+            return bulk_cache['batches_by_year_range'].get(year_range)
+        return None
+
+    batch = Batch.query.filter_by(batch_name=batch_identity, dept_id=current_user.dept_id).first()
+    if batch:
+        return batch
+
+    year_range = parse_batch_year_range(batch_identity)
+    if not year_range:
+        return None
+
+    for dept_batch in Batch.query.filter_by(dept_id=current_user.dept_id).all():
+        if parse_batch_year_range(dept_batch.batch_name) == year_range:
+            return dept_batch
+    return None
+
+
+def clean_bulk_section_identity(value):
+    text = clean_bulk_cell(value).upper()
+    if not text:
+        return ''
+    text = re.sub(r'\([^)]*\bSEM(?:ESTER)?[^)]*\)', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\bSEM(?:ESTER)?\s*[-:]?\s*\d+\b', '', text, flags=re.IGNORECASE)
+    text = re.sub(r'\s+', ' ', text).strip(' -_')
+    return text[:10] if text else ''
+
+
+def find_section_by_identity(current_user, batch, section_identity, bulk_cache=None):
+    section_identity = clean_bulk_section_identity(section_identity)
+    if not section_identity:
+        return None
+
+    if bulk_cache:
+        return bulk_cache['sections_by_batch_identity'].get((batch.batch_id, section_identity))
+
+    sections = Section.query.filter_by(batch_id=batch.batch_id, dept_id=current_user.dept_id).all()
+    for section in sections:
+        if clean_bulk_section_identity(section.section_name) == section_identity:
+            return section
+    return None
+
+
+def find_unique_batch_for_section(current_user, section_identity, bulk_cache=None):
+    section_identity = clean_bulk_section_identity(section_identity)
+    if not section_identity:
+        return None
+
+    if bulk_cache:
+        batch_ids = bulk_cache['section_identity_batch_ids'].get(section_identity, set())
+        if len(batch_ids) != 1:
+            return None
+        return bulk_cache['batches_by_id'].get(next(iter(batch_ids)))
+
+    matches = []
+    for section in Section.query.filter_by(dept_id=current_user.dept_id).all():
+        if clean_bulk_section_identity(section.section_name) == section_identity:
+            matches.append(section.batch_id)
+    unique_batch_ids = set(matches)
+    if len(unique_batch_ids) != 1:
+        return None
+    return db.session.get(Batch, next(iter(unique_batch_ids)))
+
+
+def create_bulk_batch_if_possible(current_user, batch_name, current_semester, bulk_cache=None):
+    dept_batches = bulk_cache['batches'] if bulk_cache else Batch.query.filter_by(dept_id=current_user.dept_id).all()
     program_ids = {batch.program_id for batch in dept_batches if batch.program_id}
     if len(program_ids) != 1:
         raise ValueError(f'Batch {batch_name} not found')
@@ -2459,6 +2606,13 @@ def create_bulk_batch_if_possible(current_user, batch_name, current_semester):
     batch = Batch(batch_name=batch_name, dept_id=current_user.dept_id, program_id=program.program_id)
     db.session.add(batch)
     db.session.flush()
+    if bulk_cache:
+        bulk_cache['batches'].append(batch)
+        bulk_cache['batches_by_id'][batch.batch_id] = batch
+        bulk_cache['batches_by_name'][batch.batch_name.lower()] = batch
+        year_range = parse_batch_year_range(batch.batch_name)
+        if year_range:
+            bulk_cache['batches_by_year_range'][year_range] = batch
     for semester_no in range(1, program.duration_semesters + 1):
         db.session.add(Semester(
             batch_id=batch.batch_id,
@@ -2468,40 +2622,43 @@ def create_bulk_batch_if_possible(current_user, batch_name, current_semester):
     return batch
 
 
-def resolve_bulk_student_target(current_user, row):
-    batch_id = row.get('batch_id')
-    section_id = row.get('section_id')
-    batch_name = (str(row.get('batch_name') or '').strip())
-    section_name = (str(row.get('section_name') or row.get('class_name') or '').strip())
-    current_semester = parse_semester_value(row.get('current_semester') or row.get('semester') or row.get('semester_text'))
+def resolve_bulk_student_target(current_user, row, bulk_cache=None):
+    batch_id = clean_bulk_cell(row.get('batch_id'))
+    section_id = clean_bulk_cell(row.get('section_id'))
+    batch_name = clean_bulk_cell(row.get('batch_name'))
+    batch_identity = batch_name or (batch_id if not batch_id.isdigit() else '')
+    section_name = clean_bulk_cell(row.get('section_name') or row.get('class_name'))
+    section_identity = section_name or (section_id if not section_id.isdigit() else '')
+    current_semester = parse_semester_value(
+        row.get('current_semester') or row.get('semester') or row.get('semester_text') or section_name or section_id
+    )
 
     batch = None
-    if batch_id not in (None, ''):
-        batch = db.session.get(Batch, int(batch_id))
-    elif batch_name:
-        batch = Batch.query.filter_by(batch_name=batch_name, dept_id=current_user.dept_id).first()
+    if batch_id and batch_id.isdigit():
+        batch = bulk_cache['batches_by_id'].get(int(batch_id)) if bulk_cache else db.session.get(Batch, int(batch_id))
+    elif batch_identity:
+        batch = find_batch_by_identity(current_user, batch_identity, bulk_cache)
         if not batch:
-            batch = create_bulk_batch_if_possible(current_user, batch_name, current_semester)
+            batch = create_bulk_batch_if_possible(current_user, batch_identity, current_semester, bulk_cache)
     else:
-        dept_batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
-        if len(dept_batches) == 1:
-            batch = dept_batches[0]
+        batch = find_unique_batch_for_section(current_user, section_identity, bulk_cache)
+        if not batch:
+            dept_batches = bulk_cache['batches'] if bulk_cache else Batch.query.filter_by(dept_id=current_user.dept_id).all()
+            if len(dept_batches) == 1:
+                batch = dept_batches[0]
 
     if not batch or batch.dept_id != current_user.dept_id:
         raise ValueError('Invalid or missing batch')
 
     section = None
-    if section_id not in (None, ''):
-        section = db.session.get(Section, int(section_id))
-    elif section_name:
-        section = Section.query.filter_by(
-            section_name=section_name,
-            batch_id=batch.batch_id,
-            dept_id=current_user.dept_id,
-        ).first()
+    if section_id and section_id.isdigit():
+        section = bulk_cache['sections_by_id'].get(int(section_id)) if bulk_cache else db.session.get(Section, int(section_id))
+    elif section_identity:
+        section = find_section_by_identity(current_user, batch, section_identity, bulk_cache)
         if not section:
+            cleaned_section_name = clean_bulk_section_identity(section_identity)
             section = Section(
-                section_name=section_name,
+                section_name=cleaned_section_name,
                 current_semester=current_semester,
                 batch_id=batch.batch_id,
                 dept_id=current_user.dept_id,
@@ -2509,11 +2666,84 @@ def resolve_bulk_student_target(current_user, row):
             )
             db.session.add(section)
             db.session.flush()
+            if bulk_cache:
+                bulk_cache['sections'].append(section)
+                bulk_cache['sections_by_id'][section.section_id] = section
+                bulk_cache['sections_by_batch_id'].setdefault(batch.batch_id, []).append(section)
+                bulk_cache['sections_by_batch_identity'][(batch.batch_id, cleaned_section_name)] = section
+                bulk_cache['section_identity_batch_ids'].setdefault(cleaned_section_name, set()).add(batch.batch_id)
+    else:
+        sections = bulk_cache['sections_by_batch_id'].get(batch.batch_id, []) if bulk_cache else Section.query.filter_by(batch_id=batch.batch_id, dept_id=current_user.dept_id).all()
+        if len(sections) == 1:
+            section = sections[0]
+        elif not sections:
+            section = Section(
+                section_name='A',
+                current_semester=current_semester,
+                batch_id=batch.batch_id,
+                dept_id=current_user.dept_id,
+                program_id=batch.program_id,
+            )
+            db.session.add(section)
+            db.session.flush()
+            if bulk_cache:
+                bulk_cache['sections'].append(section)
+                bulk_cache['sections_by_id'][section.section_id] = section
+                bulk_cache['sections_by_batch_id'].setdefault(batch.batch_id, []).append(section)
+                bulk_cache['sections_by_batch_identity'][(batch.batch_id, 'A')] = section
+                bulk_cache['section_identity_batch_ids'].setdefault('A', set()).add(batch.batch_id)
 
     if not section or section.dept_id != current_user.dept_id or section.batch_id != batch.batch_id:
         raise ValueError('Invalid or missing section')
 
     return batch, section
+
+
+def build_bulk_email(email, roll_no, current_user, idx):
+    email = normalize_email(clean_bulk_cell(email))
+    if email:
+        return email
+    seed = clean_bulk_cell(roll_no, f'student{idx}').lower()
+    seed = re.sub(r'[^a-z0-9]+', '.', seed).strip('.') or f'student{idx}'
+    return f'{seed}.{current_user.dept_id}.{idx}@attendance.local'
+
+
+def safe_bulk_float(value, default=0):
+    try:
+        return float(clean_bulk_cell(value, str(default)))
+    except (TypeError, ValueError):
+        return default
+
+
+def build_bulk_upload_cache(current_user):
+    batches = Batch.query.filter_by(dept_id=current_user.dept_id).all()
+    sections = Section.query.filter_by(dept_id=current_user.dept_id).all()
+
+    cache = {
+        'batches': batches,
+        'batches_by_id': {batch.batch_id: batch for batch in batches},
+        'batches_by_name': {batch.batch_name.lower(): batch for batch in batches},
+        'batches_by_year_range': {},
+        'sections': sections,
+        'sections_by_id': {section.section_id: section for section in sections},
+        'sections_by_batch_id': defaultdict(list),
+        'sections_by_batch_identity': {},
+        'section_identity_batch_ids': defaultdict(set),
+    }
+
+    for batch in batches:
+        year_range = parse_batch_year_range(batch.batch_name)
+        if year_range:
+            cache['batches_by_year_range'][year_range] = batch
+
+    for section in sections:
+        section_identity = clean_bulk_section_identity(section.section_name)
+        cache['sections_by_batch_id'][section.batch_id].append(section)
+        if section_identity:
+            cache['sections_by_batch_identity'][(section.batch_id, section_identity)] = section
+            cache['section_identity_batch_ids'][section_identity].add(section.batch_id)
+
+    return cache
 
 
 def clean_bulk_cell(value, default=''):
@@ -2572,51 +2802,87 @@ def bulk_upload_students(current_user):
             return jsonify({'error': f'CSV parse error: {exc}'}), 400
         return jsonify({'error': f'Excel parse error: {exc}'}), 400
 
+    bulk_cache = build_bulk_upload_cache(current_user)
+    upload_emails = set()
+    upload_rolls = set()
+    for idx, row in enumerate(rows, start=1):
+        row_roll = clean_bulk_cell(get_bulk_value(row, 'roll_no', 'roll no', 'roll', 'roll number', 'enrollment_no', 'enrollment no'))
+        row_email = build_bulk_email(get_bulk_value(row, 'email', 'student_email', 'student email'), row_roll, current_user, idx)
+        if not row_roll:
+            row_roll = re.sub(r'[^A-Z0-9]+', '', row_email.split('@')[0].upper()) or f'BULK{idx}'
+        upload_emails.add(normalize_email(row_email))
+        upload_rolls.add(row_roll.upper())
+
+    existing_emails = {
+        email.lower()
+        for (email,) in db.session.query(User.email).filter(User.email.in_(upload_emails)).all()
+        if email
+    } if upload_emails else set()
+    existing_rolls = {
+        roll_no.upper()
+        for (roll_no,) in db.session.query(Student.roll_no)
+        .filter(Student.dept_id == current_user.dept_id, Student.roll_no.in_(upload_rolls))
+        .all()
+        if roll_no
+    } if upload_rolls else set()
+
     created = 0
     errors = []
+    new_emails = set()
+    new_rolls = set()
+    password_hash_cache = {}
+    pending_emails = []
+    pending_rolls = []
+    pending_created = 0
     for idx, row in enumerate(rows, start=1):
         try:
             name = get_bulk_value(row, 'name', 'student_name', 'student name')
             email = get_bulk_value(row, 'email', 'student_email', 'student email')
             roll_no = get_bulk_value(row, 'roll_no', 'roll no', 'roll', 'roll number', 'enrollment_no', 'enrollment no')
+            clean_roll_no = clean_bulk_cell(roll_no)
+            clean_email = build_bulk_email(email, clean_roll_no, current_user, idx)
+            if not clean_roll_no:
+                clean_roll_no = re.sub(r'[^A-Z0-9]+', '', clean_email.split('@')[0].upper()) or f'BULK{idx}'
             data = {
-                'name': clean_bulk_cell(name),
-                'email': clean_bulk_cell(email),
+                'name': clean_bulk_cell(name, clean_roll_no),
+                'email': clean_email,
                 'password': clean_bulk_cell(get_bulk_value(row, 'password'), 'Student@123'),
-                'roll_no': clean_bulk_cell(roll_no),
+                'roll_no': clean_roll_no,
                 'batch_id': get_bulk_value(row, 'batch_id', 'batch id'),
                 'section_id': get_bulk_value(row, 'section_id', 'section id'),
                 'batch_name': get_bulk_value(row, 'batch_name', 'batch name', 'batch'),
                 'section_name': get_bulk_value(row, 'section_name', 'section name', 'section', 'class_name', 'class name'),
                 'current_semester': get_bulk_value(row, 'current_semester', 'current semester', 'semester', 'semester_text', 'semester text'),
-                'student_type': clean_bulk_cell(get_bulk_value(row, 'student_type', 'student type', 'type'), 'Regular'),
-                'passport_number': clean_bulk_cell(get_bulk_value(row, 'passport_number', 'passport number', 'passport')),
-                'category': clean_bulk_cell(get_bulk_value(row, 'category')),
+                'student_type': clean_bulk_cell(get_bulk_value(row, 'student_type', 'student type', 'type'), 'Regular')[:20],
+                'passport_number': clean_bulk_cell(get_bulk_value(row, 'passport_number', 'passport number', 'passport'))[:120],
+                'category': clean_bulk_cell(get_bulk_value(row, 'category'))[:120],
                 'entrance_marks': get_bulk_value(row, 'entrance_marks', 'entrance marks') or 0,
-                'phone': clean_bulk_cell(get_bulk_value(row, 'phone', 'mobile', 'phone number', 'mobile number')),
+                'phone': clean_bulk_cell(get_bulk_value(row, 'phone', 'mobile', 'phone number', 'mobile number'))[:20],
             }
 
-            if not data['name'] or not data['email'] or not data['roll_no']:
-                errors.append({'row': idx, 'error': 'Missing required fields'})
-                continue
-
             try:
-                batch, section = resolve_bulk_student_target(current_user, data)
+                batch, section = resolve_bulk_student_target(current_user, data, bulk_cache)
             except ValueError as exc:
                 errors.append({'row': idx, 'error': str(exc)})
                 continue
 
             email = normalize_email(data['email'])
-            if User.query.filter_by(email=email).first() or Student.query.filter_by(roll_no=data['roll_no'].upper(), dept_id=current_user.dept_id).first():
+            roll_no = data['roll_no'].upper()
+            if email in existing_emails or email in new_emails or roll_no in existing_rolls or roll_no in new_rolls:
                 errors.append({'row': idx, 'error': 'Duplicate user or roll number'});
                 continue
 
-            user = User(name=data['name'], email=email, password_hash=hash_password(data['password']), phone=data['phone'], role='STUDENT', dept_id=current_user.dept_id, college_id=current_user.college_id)
+            password_hash = password_hash_cache.get(data['password'])
+            if not password_hash:
+                password_hash = hash_password(data['password'])
+                password_hash_cache[data['password']] = password_hash
+
+            user = User(name=data['name'], email=email, password_hash=password_hash, phone=data['phone'], role='STUDENT', dept_id=current_user.dept_id, college_id=current_user.college_id)
             db.session.add(user)
             db.session.flush()
             student = Student(
                 student_id=user.user_id,
-                roll_no=data['roll_no'].upper(),
+                roll_no=roll_no,
                 batch_id=batch.batch_id,
                 section_id=section.section_id,
                 dept_id=current_user.dept_id,
@@ -2625,16 +2891,36 @@ def bulk_upload_students(current_user):
                 student_type=data['student_type'],
                 passport_number=data['passport_number'] or None,
                 category=data['category'] or None,
-                entrance_marks=float(data['entrance_marks'] or 0),
+                entrance_marks=safe_bulk_float(data['entrance_marks']),
             )
             db.session.add(student)
+            new_emails.add(email)
+            new_rolls.add(roll_no)
+            pending_emails.append(email)
+            pending_rolls.append(roll_no)
+            pending_created += 1
             created += 1
+            if pending_created >= 100:
+                db.session.commit()
+                pending_emails.clear()
+                pending_rolls.clear()
+                pending_created = 0
         except Exception as exc:
             db.session.rollback()
-            errors.append({'row': idx, 'error': str(exc)})
+            for pending_email in pending_emails:
+                new_emails.discard(pending_email)
+            for pending_roll in pending_rolls:
+                new_rolls.discard(pending_roll)
+            created -= pending_created
+            pending_emails.clear()
+            pending_rolls.clear()
+            pending_created = 0
+            bulk_cache = build_bulk_upload_cache(current_user)
+            errors.append({'row': idx, 'error': exc.__class__.__name__})
             continue
 
-    db.session.commit()
+    if pending_created:
+        db.session.commit()
     return jsonify({'created': created, 'errors': errors})
 
 @dept_bp.route('/students/<int:student_id>', methods=['DELETE'])
